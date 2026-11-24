@@ -38,6 +38,7 @@ class TripTrackingService : Service() {
     private var last: Location? = null
     private var meters = 0.0
     private var purpose = ""
+    private var jobId = ""
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -62,16 +63,18 @@ class TripTrackingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> start(intent.getStringExtra(EXTRA_PURPOSE).orEmpty())
+            ACTION_START -> start(intent.getStringExtra(EXTRA_PURPOSE).orEmpty(), intent.getStringExtra(EXTRA_JOB_ID).orEmpty())
             ACTION_STOP -> stop()
         }
         return START_NOT_STICKY
     }
 
     @SuppressLint("MissingPermission") // permission is requested in the UI before starting
-    private fun start(purposeText: String) {
+    private fun start(purposeText: String, job: String) {
         if (_running.value) return
         purpose = purposeText
+        jobId = job
+        _jobId.value = job
         meters = 0.0
         last = null
         _km.value = 0.0
@@ -98,11 +101,14 @@ class TripTrackingService : Service() {
         val km = round(meters / 100.0) / 10.0 // one decimal
         val app = applicationContext
         val p = purpose
+        val job = jobId
         _running.value = false
         scope.launch {
             if (km > 0.0) {
-                AppDb.get(app).trips().upsert(
-                    Trip(date = LocalDate.now().toString(), km = km, purpose = p, source = "gps")
+                val db = AppDb.get(app)
+                val customer = if (job.isBlank()) "" else db.jobs().get(job)?.customerId.orEmpty()
+                db.trips().upsert(
+                    Trip(date = LocalDate.now().toString(), km = km, purpose = p, source = "gps", jobId = job, customerId = customer)
                 )
                 SyncWorker.syncSoon(app)
             }
@@ -120,15 +126,19 @@ class TripTrackingService : Service() {
         const val ACTION_START = "start"
         const val ACTION_STOP = "stop"
         const val EXTRA_PURPOSE = "purpose"
+        const val EXTRA_JOB_ID = "jobId"
 
         private val _running = MutableStateFlow(false)
         private val _km = MutableStateFlow(0.0)
+        private val _jobId = MutableStateFlow("")
         val running: StateFlow<Boolean> = _running
         val km: StateFlow<Double> = _km
+        /** The job the running trip is being recorded to ("" = none). */
+        val jobId: StateFlow<String> = _jobId
 
-        fun start(context: Context, purpose: String) {
+        fun start(context: Context, purpose: String, jobId: String = "") {
             val i = Intent(context, TripTrackingService::class.java)
-                .setAction(ACTION_START).putExtra(EXTRA_PURPOSE, purpose)
+                .setAction(ACTION_START).putExtra(EXTRA_PURPOSE, purpose).putExtra(EXTRA_JOB_ID, jobId)
             context.startForegroundService(i)
         }
 

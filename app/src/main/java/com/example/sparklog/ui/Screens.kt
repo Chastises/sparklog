@@ -53,7 +53,9 @@ import com.example.sparklog.data.Todo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.style.TextDecoration
@@ -180,6 +182,7 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
                     onGoTab = { tab = it },
                     onOpenSub = { sub = it },
                     onOpenJobs = { section -> jobsSection = section; tab = 2 },
+                    onOpenJob = { openJob = it },
                 )
                 1 -> CalendarScreen(vm, onOpenDay = { day = it.toString() })
                 2 -> JobsHub(vm, jobsSection, onSection = { jobsSection = it }, onOpenJob = { openJob = it }, onOpenMaterials = { materialsJob = it })
@@ -193,15 +196,19 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
 
 /** Everything that hangs off a job lives here: jobs, customers, driving and materials. */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit, onOpenJob: (String) -> Unit, onOpenMaterials: (String) -> Unit) {
     val titles = listOf("Jobs", "Customers", "Drive", "Materials")
     Column(Modifier.fillMaxSize()) {
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
             titles.forEachIndexed { i, title ->
-                FilterChip(selected = section == i, onClick = { onSection(i) }, label = { Text(title) })
+                SegmentedButton(
+                    selected = section == i,
+                    onClick = { onSection(i) },
+                    shape = SegmentedButtonDefaults.itemShape(index = i, count = titles.size),
+                    icon = {},
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp),
+                ) { Text(title, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelMedium) }
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -224,6 +231,7 @@ fun HomeScreen(
     onGoTab: (Int) -> Unit,
     onOpenSub: (String) -> Unit,
     onOpenJobs: (Int) -> Unit,
+    onOpenJob: (String) -> Unit,
 ) {
     val today = LocalDate.now()
     val ds = today.toString()
@@ -235,6 +243,8 @@ fun HomeScreen(
     val todos by vm.todos.collectAsState(emptyList())
     val jobs by vm.jobs.collectAsState(emptyList())
     val allMaterials by vm.allMaterials.collectAsState(emptyList())
+    val allWork by vm.allWork.collectAsState(emptyList())
+    val allTrips by vm.allTrips.collectAsState(emptyList())
     val names = rememberNames(vm)
 
     var note by remember { mutableStateOf(vm.prefs.homeNote) }
@@ -295,9 +305,35 @@ fun HomeScreen(
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
-                Text("This month", style = MaterialTheme.typography.titleMedium)
-                Text("${fmt(monthWork.sumOf { it.hours })} h worked")
-                Text("${jobs.count { !it.finished }} ongoing jobs")
+                Text("Ongoing jobs", style = MaterialTheme.typography.titleMedium)
+                val ongoingJobs = jobs.filter { !it.finished }.sortedByDescending { it.number }
+                if (ongoingJobs.isEmpty()) {
+                    Text("No ongoing jobs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text("To invoice so far, ex VAT", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                ongoingJobs.take(6).forEach { j ->
+                    val markup = if (j.markupPercent >= 0) j.markupPercent else vm.prefs.defaultMarkup.toDouble()
+                    val d = JobExportData(
+                        j, null, allWork.filter { it.jobId == j.id }, allTrips.filter { it.jobId == j.id },
+                        allMaterials.filter { it.jobId == j.id }, markup,
+                        if (j.hourlyRate >= 0) j.hourlyRate else vm.prefs.hourlyRate.toDouble(),
+                        if (j.ratePer10Km >= 0) j.ratePer10Km else vm.prefs.ratePer10Km.toDouble(),
+                        if (j.calloutFee >= 0) j.calloutFee else vm.prefs.calloutFee.toDouble(),
+                    )
+                    Row(
+                        Modifier.fillMaxWidth().clickable { onOpenJob(j.id) }.padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("#${j.number} ${j.title.ifBlank { names[j.customerId].orEmpty() }}".trim(),
+                            Modifier.weight(1f), maxLines = 1)
+                        Text("${money(d.totalExVat)} kr", style = MaterialTheme.typography.titleSmall)
+                    }
+                }
+                if (ongoingJobs.size > 6) {
+                    TextButton(onClick = { onOpenJobs(0) }) { Text("All ${ongoingJobs.size} ongoing jobs") }
+                }
                 if (needJob > 0) {
                     Text("$needJob imported invoice lines need a job", color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 4.dp))
@@ -592,6 +628,35 @@ private fun EmptyHint(text: String) {
     Text(text, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
+/** A list entry as a card: small overline (job number), bold title, detail lines, and a value on the right. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ItemCard(
+    title: String,
+    overline: String? = null,
+    lines: List<String> = emptyList(),
+    value: String? = null,
+    titleColor: Color = Color.Unspecified,
+    onClick: () -> Unit,
+) {
+    Card(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                if (overline != null) {
+                    Text(overline, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
+                Text(title, style = MaterialTheme.typography.titleMedium, color = titleColor)
+                lines.forEach {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            if (value != null) {
+                Text(value, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 12.dp))
+            }
+        }
+    }
+}
+
 @Composable
 private fun TripRow(t: Trip, names: Map<String, String>, showDate: Boolean, showJob: Boolean = true, onClick: () -> Unit) {
     val route = listOf(t.fromPlace, t.toPlace).filter { it.isNotBlank() }.joinToString(" → ").ifBlank { "Trip" }
@@ -635,10 +700,13 @@ fun DriveScreen(vm: MainVm) {
     val trips by vm.recentTrips.collectAsState(emptyList())
     val names = rememberNames(vm)
     var purpose by rememberSaveable { mutableStateOf("") }
+    var tripJob by rememberSaveable { mutableStateOf("") }
+    val runningJob by TripTrackingService.jobId.collectAsStateWithLifecycle()
+    val allJobs by vm.jobs.collectAsState(emptyList())
     var dialog by remember { mutableStateOf<Any?>(null) }
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.any { it }) TripTrackingService.start(context, purpose)
+        if (result.values.any { it }) TripTrackingService.start(context, purpose, tripJob)
     }
 
     val monthPrefix = YearMonth.now().toString()
@@ -651,7 +719,17 @@ fun DriveScreen(vm: MainVm) {
                     Column(Modifier.padding(16.dp)) {
                         Text(if (running) "Recording: ${fmt(liveKm)} km" else "GPS trip recorder",
                             style = MaterialTheme.typography.titleMedium)
+                        if (running) {
+                            val j = allJobs.find { it.id == runningJob }
+                            Text(
+                                if (j != null) "Recording to job #${j.number}" + if (j.title.isNotBlank()) " ${j.title}" else ""
+                                else "Not linked to a job",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         if (!running) {
+                            Spacer(Modifier.height(8.dp))
+                            JobPicker(vm, tripJob) { tripJob = it }
                             OutlinedTextField(
                                 value = purpose, onValueChange = { purpose = it },
                                 label = { Text("Purpose / customer (optional)") },
@@ -722,24 +800,28 @@ fun MaterialsScreen(vm: MainVm, onOpenMaterials: (String) -> Unit) {
             }
             if (unassigned.isNotEmpty()) {
                 item {
-                    ListItem(
-                        headlineContent = { Text("No job assigned", color = MaterialTheme.colorScheme.error) },
-                        supportingContent = { Text("${unassigned.size} lines need a job") },
-                        trailingContent = { Text("${money(unassigned.sumOf { it.quantity * it.unitPrice })} kr") },
-                        modifier = Modifier.clickable { onOpenMaterials(NO_JOB) },
+                    ItemCard(
+                        title = "No job assigned",
+                        titleColor = MaterialTheme.colorScheme.error,
+                        lines = listOf("${unassigned.size} lines need a job"),
+                        value = "${money(unassigned.sumOf { it.quantity * it.unitPrice })} kr",
+                        onClick = { onOpenMaterials(NO_JOB) },
                     )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
             items(rows, key = { it.id }) { j ->
                 val lines = byJob[j.id]!!
-                ListItem(
-                    headlineContent = { Text(jobLabel(j, custNames)) },
-                    supportingContent = { Text("${lines.size} lines · last ${lines.maxOf { it.date }}") },
-                    trailingContent = { Text("${money(lines.sumOf { it.quantity * it.unitPrice })} kr") },
-                    modifier = Modifier.clickable { onOpenMaterials(j.id) },
+                val customerName = custNames[j.customerId].orEmpty()
+                ItemCard(
+                    overline = "#${j.number}",
+                    title = j.title.ifBlank { customerName.ifBlank { "Job" } },
+                    lines = listOfNotNull(
+                        customerName.takeIf { it.isNotBlank() && j.title.isNotBlank() },
+                        "${lines.size} lines · last ${lines.maxOf { it.date }}",
+                    ),
+                    value = "${money(lines.sumOf { it.quantity * it.unitPrice })} kr",
+                    onClick = { onOpenMaterials(j.id) },
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
         FloatingActionButton(
@@ -894,13 +976,17 @@ fun JobsScreen(vm: MainVm, onOpenJob: (String) -> Unit) {
     @Composable
     fun row(j: Job) {
         val cost = costByJob[j.id] ?: 0.0
-        ListItem(
-            headlineContent = { Text(jobLabel(j, custNames)) },
-            supportingContent = { if (cost > 0) Text("Materials: ${money(cost)} kr") },
-            trailingContent = { Text("${fmt(hoursByJob[j.id] ?: 0.0)} h") },
-            modifier = Modifier.clickable { onOpenJob(j.id) },
+        val customerName = custNames[j.customerId].orEmpty()
+        ItemCard(
+            overline = "#${j.number}",
+            title = j.title.ifBlank { customerName.ifBlank { "Job" } },
+            lines = listOfNotNull(
+                customerName.takeIf { it.isNotBlank() && j.title.isNotBlank() },
+                if (cost > 0) "Materials ${money(cost)} kr" else null,
+            ),
+            value = "${fmt(hoursByJob[j.id] ?: 0.0)} h",
+            onClick = { onOpenJob(j.id) },
         )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -1178,20 +1264,16 @@ fun CustomersScreen(vm: MainVm) {
         val place = listOf(c.address, listOf(c.postalCode, c.city).filter { it.isNotBlank() }.joinToString(" "))
             .filter { it.isNotBlank() }.joinToString(", ")
         val openJobs = ongoingJobsBy[c.id] ?: 0
-        ListItem(
-            headlineContent = { Text(c.name) },
-            supportingContent = {
-                Column {
-                    if (place.isNotBlank()) Text(place)
-                    val contact = listOf(c.contactPerson, c.phone).filter { it.isNotBlank() }.joinToString(" · ")
-                    if (contact.isNotBlank()) Text(contact)
-                    if (openJobs > 0) Text("$openJobs ongoing job" + if (openJobs > 1) "s" else "")
-                }
-            },
-            trailingContent = { Text("${fmt(hoursBy[c.id] ?: 0.0)} h") },
-            modifier = Modifier.clickable { dialog = c },
+        ItemCard(
+            title = c.name,
+            lines = listOfNotNull(
+                place.takeIf { it.isNotBlank() },
+                listOf(c.contactPerson, c.phone).filter { it.isNotBlank() }.joinToString(" · ").takeIf { it.isNotBlank() },
+                if (openJobs > 0) "$openJobs ongoing job" + if (openJobs > 1) "s" else "" else null,
+            ),
+            value = "${fmt(hoursBy[c.id] ?: 0.0)} h",
+            onClick = { dialog = c },
         )
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 
     Box(Modifier.fillMaxSize()) {
