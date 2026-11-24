@@ -697,7 +697,8 @@ fun DriveScreen(vm: MainVm) {
     val context = LocalContext.current
     val running by TripTrackingService.running.collectAsStateWithLifecycle()
     val liveKm by TripTrackingService.km.collectAsStateWithLifecycle()
-    val trips by vm.recentTrips.collectAsState(emptyList())
+    val recent by vm.recentTrips.collectAsState(emptyList())
+    val trips = remember(recent) { recent.sortedWith(compareBy({ it.date }, { it.updatedAt })) } // oldest first
     val names = rememberNames(vm)
     var purpose by rememberSaveable { mutableStateOf("") }
     var tripJob by rememberSaveable { mutableStateOf("") }
@@ -873,7 +874,7 @@ fun JobMaterialsScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
     val unassigned = jobId == NO_JOB
     val job = jobs.find { it.id == jobId }
     val lines = materials.filter { if (unassigned) it.jobId.isBlank() else it.jobId == jobId }
-    val byDate = lines.groupBy { it.date }.toSortedMap(compareByDescending<String> { it })
+    val byDate = lines.sortedBy { it.updatedAt }.groupBy { it.date }.toSortedMap()
     val title = when {
         unassigned -> "No job assigned"
         job != null -> jobLabel(job, custNames)
@@ -1040,9 +1041,9 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
     }
 
     val customer = customers.find { it.id == job.customerId }
-    val work = allWork.filter { it.jobId == jobId }.sortedByDescending { it.date }
-    val trips = allTrips.filter { it.jobId == jobId }.sortedByDescending { it.date }
-    val materials = allMaterials.filter { it.jobId == jobId }.sortedByDescending { it.date }
+    val work = allWork.filter { it.jobId == jobId }.sortedWith(compareBy({ it.date }, { it.updatedAt }))
+    val trips = allTrips.filter { it.jobId == jobId }.sortedWith(compareBy({ it.date }, { it.updatedAt }))
+    val materials = allMaterials.filter { it.jobId == jobId }.sortedWith(compareBy({ it.date }, { it.updatedAt }))
     val todos = allTodos.filter { it.jobId == jobId }.sortedWith(compareBy({ it.done }, { if (it.dueAt > 0) 0 else 1 }, { it.dueAt }))
     val cost = materials.sumOf { Markup.cost(it) }
     val markupPct = if (job.markupPercent >= 0) job.markupPercent else vm.prefs.defaultMarkup.toDouble()
