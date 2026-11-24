@@ -172,7 +172,7 @@ def main():
         up = urllib.request.Request(BASE + "/catalog/upload?supplier=Test", data=data, method="POST",
                                     headers={"Authorization": f"Bearer {TOKEN}"})
         assert json.load(urllib.request.urlopen(up))["imported"] == 1
-        assert get("/catalog/item?enr=E9")["net"] == 100.0  # 1000 per 10 units
+        assert get("/catalog/item?enr=E9")["net"] == 1000.0  # file price is per 1 unit
         bad = urllib.request.Request(BASE + "/catalog/upload", data=data, method="POST", headers={"Authorization": "Bearer nope"})
         try:
             urllib.request.urlopen(bad); raise AssertionError("expected 401")

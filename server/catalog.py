@@ -1,7 +1,7 @@
 """Retailer price list (catalog), kept in its own SQLite file next to the sync database.
 
 Import (stdlib only, streams the .xlsx so 200k rows is fine):
-    python3 catalog.py import Prisfil.xlsx [--supplier "Retailer name"] [--db catalog.db] [--price-per 10]
+    python3 catalog.py import Prisfil.xlsx [--supplier "Retailer name"] [--db catalog.db] [--price-per 1]
 Look something up:
     python3 catalog.py search "minibrytare s201"
 
@@ -9,8 +9,8 @@ Columns used from the retailer's file: Artnr (the E-number), Artben, Sortkod, An
 GNP (gross), Rabatt (discount %), KN (net, your price), Försk ('M' = copper surcharge not
 included), GDatum (valid from).
 
-PRICE_PER: the file states prices per 10 units of the sort unit (checked against known items,
-e.g. a 1-pole 6 A breaker comes out around 117 kr net). Change PRICE_PER if an invoice shows
+PRICE_PER: the KN price in the file is per 1 sort unit (confirmed against real items; dividing by
+10 gave a tenth of the real price). Change PRICE_PER (or pass --price-per) if an invoice shows
 otherwise, then re-import.
 """
 import re
@@ -19,7 +19,7 @@ import sys
 import zipfile
 import xml.etree.ElementTree as ET
 
-PRICE_PER = 10.0
+PRICE_PER = 1.0
 NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 UNITS = {"ST": "pcs", "M": "m", "PR": "pair", "KG": "kg", "CM": "cm", "V": "pcs", "G": "g", "FP": "pack"}
 
