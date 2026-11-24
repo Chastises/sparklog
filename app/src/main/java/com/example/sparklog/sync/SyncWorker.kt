@@ -161,11 +161,13 @@ private fun JSONObject.toTodo() = Todo(
 
 private fun Job.toJson() = JSONObject()
     .put("id", id).put("number", number).put("customerId", customerId).put("title", title)
-    .put("finished", finished).put("updatedAt", updatedAt).put("deleted", deleted)
+    .put("finished", finished).put("markupPercent", markupPercent)
+    .put("updatedAt", updatedAt).put("deleted", deleted)
 
 private fun JSONObject.toJob() = Job(
     id = getString("id"), number = optInt("number"), customerId = optString("customerId"),
     title = optString("title"), finished = optBoolean("finished"),
+    markupPercent = optDouble("markupPercent", -1.0),
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )
 

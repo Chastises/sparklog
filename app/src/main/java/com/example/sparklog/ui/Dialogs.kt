@@ -274,12 +274,17 @@ fun JobDialog(
     var customerId by remember { mutableStateOf(initial?.customerId ?: "") }
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var finished by remember { mutableStateOf(initial?.finished ?: false) }
+    var markup by remember { mutableStateOf(initial?.markupPercent?.takeIf { it >= 0 }?.let { fmt(it) } ?: "") }
+    val markupOk = markup.isBlank() || (markup.toNum()?.let { it >= 0 } == true)
     FormDialog(
         title = if (initial == null) "New job" else "Job #${initial.number}",
-        canSave = customerId.isNotBlank() || title.isNotBlank(),
+        canSave = (customerId.isNotBlank() || title.isNotBlank()) && markupOk,
         onSave = {
             val base = initial ?: Job()
-            onSave(base.copy(customerId = customerId, title = title.trim(), finished = finished))
+            onSave(base.copy(
+                customerId = customerId, title = title.trim(), finished = finished,
+                markupPercent = markup.toNum()?.takeIf { it >= 0 } ?: -1.0,
+            ))
         },
         onDelete = onDelete,
         onDismiss = onDismiss,
@@ -290,6 +295,10 @@ fun JobDialog(
         )
         CustomerPicker(vm, customerId) { customerId = it }
         Field("Title / what the job is", title, { title = it })
+        Field(
+            "Material markup % (blank = default ${fmt(vm.prefs.defaultMarkup.toDouble())}%)",
+            markup, { markup = it }, number = true, isError = !markupOk,
+        )
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Finished")

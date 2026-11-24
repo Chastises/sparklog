@@ -12,6 +12,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
+/** v3 -> v4: per-job material markup (-1 = use the default from Settings). */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `jobs` ADD COLUMN `markupPercent` REAL NOT NULL DEFAULT -1")
+    }
+}
+
 /** v2 -> v3: to-do list. */
 val MIGRATION_2_3 = object : Migration(2, 3) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -163,7 +170,7 @@ interface MaterialDao {
 
 @Database(
     entities = [Customer::class, Job::class, WorkEntry::class, Trip::class, Material::class, Todo::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDb : RoomDatabase() {
@@ -178,7 +185,7 @@ abstract class AppDb : RoomDatabase() {
         @Volatile private var instance: AppDb? = null
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "sparklog.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build().also { instance = it }
         }
     }

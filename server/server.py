@@ -24,12 +24,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 MAX_BODY = 5 * 1024 * 1024
 
 # table -> columns by type (every table also has id, updatedAt, deleted, server_ts)
+# columns whose "no value" default is not 0 (markupPercent -1 = use the app's default markup)
+REAL_DEFAULTS = {"markupPercent": -1.0}
+
 TABLES = {
     "customers": dict(
         texts=["name", "contactPerson", "phone", "email", "address", "postalCode", "city",
                "orgNumber", "propertyId", "notes"],
         reals=[], ints=[], bools=["finished"]),
-    "jobs": dict(texts=["customerId", "title"], reals=[], ints=["number"], bools=["finished"]),
+    "jobs": dict(texts=["customerId", "title"], reals=["markupPercent"], ints=["number"], bools=["finished"]),
     "todos": dict(texts=["title", "notes", "jobId"], reals=[], ints=["dueAt"], bools=["done"]),
     "work_entries": dict(texts=["date", "jobId", "customerId", "description"], reals=["hours"], ints=[], bools=[]),
     "trips": dict(texts=["date", "jobId", "customerId", "fromPlace", "toPlace", "purpose", "source"],
@@ -47,7 +50,7 @@ def connect(path):
     for table, cols in TABLES.items():
         defs = (
             [f'"{c}" TEXT' for c in cols["texts"]]
-            + [f'"{c}" REAL' for c in cols["reals"]]
+            + [f'"{c}" REAL' + (f" DEFAULT {REAL_DEFAULTS[c]}" if c in REAL_DEFAULTS else "") for c in cols["reals"]]
             + [f'"{c}" INTEGER NOT NULL DEFAULT 0' for c in cols["ints"] + cols["bools"]]
         )
         db.execute(
@@ -61,7 +64,7 @@ def connect(path):
                 db.execute(f'ALTER TABLE {table} ADD COLUMN "{c}" TEXT')
         for c in cols["reals"]:
             if c not in have:
-                db.execute(f'ALTER TABLE {table} ADD COLUMN "{c}" REAL')
+                db.execute(f'ALTER TABLE {table} ADD COLUMN "{c}" REAL' + (f" DEFAULT {REAL_DEFAULTS[c]}" if c in REAL_DEFAULTS else ""))
         for c in cols["ints"] + cols["bools"]:
             if c not in have:
                 db.execute(f'ALTER TABLE {table} ADD COLUMN "{c}" INTEGER NOT NULL DEFAULT 0')
@@ -104,7 +107,7 @@ def apply_rows(db, table, rows, ts):
         values = (
             [str(r["id"])]
             + [str(r.get(c, "") or "") for c in cols["texts"]]
-            + [float(r.get(c, 0) or 0) for c in cols["reals"]]
+            + [float(r.get(c, REAL_DEFAULTS.get(c, 0)) or 0) for c in cols["reals"]]
             + [ints[c] for c in cols["ints"]]
             + [1 if r.get(c) else 0 for c in cols["bools"]]
             + [updated_at, 1 if r.get("deleted") else 0, ts]
@@ -120,7 +123,7 @@ def rows_since(db, table, since):
         for c in cols["texts"]:
             d[c] = row[c] if row[c] is not None else ""
         for c in cols["reals"] + cols["ints"]:
-            d[c] = row[c] if row[c] is not None else 0
+            d[c] = row[c] if row[c] is not None else REAL_DEFAULTS.get(c, 0)
         for c in cols["bools"]:
             d[c] = bool(row[c])
         out.append(d)

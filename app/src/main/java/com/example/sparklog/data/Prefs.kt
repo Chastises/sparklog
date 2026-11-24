@@ -32,6 +32,11 @@ class Prefs(context: Context) {
         get() = sp.getInt("reminderMinute", 0)
         set(v) = sp.edit().putInt("reminderMinute", v).apply()
 
+    /** Default markup on material prices, in percent. Jobs can override it. Never shown to customers. */
+    var defaultMarkup: Float
+        get() = sp.getFloat("defaultMarkup", 0f)
+        set(v) = sp.edit().putFloat("defaultMarkup", v).apply()
+
     /** Free-text note shown on the home screen (stored on this phone only). */
     var homeNote: String
         get() = sp.getString("homeNote", "") ?: ""

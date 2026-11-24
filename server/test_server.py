@@ -95,6 +95,12 @@ def main():
         numbers = [j["number"] for j in everything["jobs"]]
         assert sorted(numbers) == [1001, 1002], numbers
 
+        # job markup: a job without the field keeps "use default" (-1); an explicit value round-trips
+        by_id = {j["id"]: j for j in everything["jobs"]}
+        assert by_id["j1"]["markupPercent"] == -1.0, by_id["j1"]
+        post({"since": 0, "jobs": [dict(j1, markupPercent=12.5, updatedAt=6500)]})
+        assert {j["id"]: j for j in post({"since": 0})["jobs"]}["j1"]["markupPercent"] == 12.5
+
         # material with invoice fields round-trips
         m = {"id": "m1", "date": "2026-11-24", "jobId": "j1", "customerId": "c1", "name": "Cable 3G1.5",
              "quantity": 100, "unit": "m", "unitPrice": 12.5, "supplier": "Ahlsell", "invoiceRef": "INV-9",

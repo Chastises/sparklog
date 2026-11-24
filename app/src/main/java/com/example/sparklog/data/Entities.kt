@@ -34,6 +34,8 @@ data class Job(
     val customerId: String = "",
     val title: String = "",
     val finished: Boolean = false,
+    /** Material markup in percent for this job; negative = use the default from Settings. */
+    val markupPercent: Double = -1.0,
     val updatedAt: Long = System.currentTimeMillis(),
     val deleted: Boolean = false,
 )

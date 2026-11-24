@@ -21,7 +21,22 @@ data class JobExportData(
     val work: List<WorkEntry>,
     val trips: List<Trip>,
     val materials: List<Material>,
-)
+    /** Effective material markup in percent. Used to compute customer prices; never printed. */
+    val markupPercent: Double = 0.0,
+) {
+    /** Price per unit as the customer sees it. */
+    fun unitPrice(m: Material) = Markup.unitPrice(m, markupPercent)
+    /** Line total as the customer sees it. */
+    fun lineTotal(m: Material) = Markup.lineTotal(m, markupPercent)
+}
+
+/** Markup maths shared by the screens and the exports. Rounded to whole öre per unit. */
+object Markup {
+    private fun round2(d: Double) = Math.round(d * 100.0) / 100.0
+    fun unitPrice(m: Material, pct: Double) = round2(m.unitPrice * (1.0 + pct / 100.0))
+    fun lineTotal(m: Material, pct: Double) = round2(m.quantity * unitPrice(m, pct))
+    fun cost(m: Material) = round2(m.quantity * m.unitPrice)
+}
 
 object JobExport {
     private val sv = Locale("sv", "SE") // decimal comma, matches Swedish Excel and invoices
@@ -31,15 +46,18 @@ object JobExport {
 
     private fun exportDir(context: Context): File = File(context.cacheDir, "exports").apply { mkdirs() }
 
-    /** Materials as a semicolon-separated CSV (opens directly in Excel with Swedish settings). */
+    /**
+     * Materials as a semicolon-separated CSV (opens directly in Excel with Swedish settings).
+     * Customer-facing: prices include the markup, and supplier and invoice details are left out.
+     */
     fun csv(context: Context, d: JobExportData): File {
         val sb = StringBuilder("﻿") // BOM so Excel reads UTF-8
-        sb.append("Job;Customer;Date;Material;Quantity;Unit;Unit price;Total;Supplier;Invoice\n")
+        sb.append("Job;Customer;Date;Material;Quantity;Unit;Unit price;Total\n")
         fun q(s: String) = "\"" + s.replace("\"", "\"\"") + "\""
         for (m in d.materials.sortedWith(compareBy({ it.date }, { it.name }))) {
             sb.append(listOf(
                 d.job.number.toString(), q(d.customer?.name.orEmpty()), m.date, q(m.name), num(m.quantity), m.unit,
-                money(m.unitPrice), money(m.quantity * m.unitPrice), q(m.supplier), q(m.invoiceRef),
+                money(d.unitPrice(m)), money(d.lineTotal(m)),
             ).joinToString(";")).append("\n")
         }
         val f = File(exportDir(context), "Job-${d.job.number}-materials.csv")
@@ -50,7 +68,7 @@ object JobExport {
     /** A one-to-few page PDF summary: customer, totals, materials by date, hours and trips. */
     fun pdf(context: Context, d: JobExportData): File {
         val w = PdfWriter()
-        val matTotal = d.materials.sumOf { it.quantity * it.unitPrice }
+        val matTotal = d.materials.sumOf { d.lineTotal(it) }
 
         w.text("Job #${d.job.number}" + if (d.job.title.isNotBlank()) " - ${d.job.title}" else "", w.title)
         w.gap(4f)
@@ -77,10 +95,10 @@ object JobExport {
         d.materials.groupBy { it.date }.toSortedMap().forEach { (date, lines) ->
             w.gap(6f)
             w.need(30f)
-            w.row(date, "", "", money(lines.sumOf { it.quantity * it.unitPrice }), w.boldSmall)
+            w.row(date, "", "", money(lines.sumOf { d.lineTotal(it) }), w.boldSmall)
             for (m in lines) {
-                w.row(m.name, "${num(m.quantity)} ${m.unit}", if (m.unitPrice > 0) money(m.unitPrice) else "", 
-                    if (m.unitPrice > 0) money(m.quantity * m.unitPrice) else "", w.small)
+                w.row(m.name, "${num(m.quantity)} ${m.unit}", if (m.unitPrice > 0) money(d.unitPrice(m)) else "",
+                    if (m.unitPrice > 0) money(d.lineTotal(m)) else "", w.small)
             }
         }
         if (d.materials.isNotEmpty()) {

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import com.example.sparklog.export.JobExport
 import com.example.sparklog.export.JobExportData
+import com.example.sparklog.export.Markup
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -786,11 +787,19 @@ fun JobMaterialsScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
             item {
-                Text(
-                    "Total ${money(lines.sumOf { it.quantity * it.unitPrice })} kr · ${lines.size} lines",
-                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                val pct = if (job != null && job.markupPercent >= 0) job.markupPercent else vm.prefs.defaultMarkup.toDouble()
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(
+                        "Cost ${money(lines.sumOf { Markup.cost(it) })} kr · ${lines.size} lines",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    if (!unassigned) {
+                        Text(
+                            "Customer price ${money(lines.sumOf { Markup.lineTotal(it, pct) })} kr (${fmt(pct)}% markup)",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
             if (unassigned) {
                 item {
@@ -911,7 +920,9 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
     val trips = allTrips.filter { it.jobId == jobId }.sortedByDescending { it.date }
     val materials = allMaterials.filter { it.jobId == jobId }.sortedByDescending { it.date }
     val todos = allTodos.filter { it.jobId == jobId }.sortedWith(compareBy({ it.done }, { if (it.dueAt > 0) 0 else 1 }, { it.dueAt }))
-    val cost = materials.sumOf { it.quantity * it.unitPrice }
+    val cost = materials.sumOf { Markup.cost(it) }
+    val markupPct = if (job.markupPercent >= 0) job.markupPercent else vm.prefs.defaultMarkup.toDouble()
+    val customerPrice = materials.sumOf { Markup.lineTotal(it, markupPct) }
     val now = System.currentTimeMillis()
 
     Scaffold(
@@ -925,12 +936,12 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                         DropdownMenu(expanded = shareMenu, onDismissRequest = { shareMenu = false }) {
                             DropdownMenuItem(text = { Text("Share job summary (PDF)") }, onClick = {
                                 shareMenu = false
-                                val data = JobExportData(job, customer, work, trips, materials)
+                                val data = JobExportData(job, customer, work, trips, materials, markupPct)
                                 JobExport.share(context, JobExport.pdf(context, data), "application/pdf", "Job #${job.number}")
                             })
                             DropdownMenuItem(text = { Text("Share materials (CSV)") }, onClick = {
                                 shareMenu = false
-                                val data = JobExportData(job, customer, work, trips, materials)
+                                val data = JobExportData(job, customer, work, trips, materials, markupPct)
                                 JobExport.share(context, JobExport.csv(context, data), "text/csv", "Job #${job.number} materials")
                             })
                         }
@@ -985,6 +996,14 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                     Stat("Driven", fmt(trips.sumOf { it.km }) + " km")
                     Stat("Materials", money(cost) + " kr")
                 }
+            }
+            if (materials.isNotEmpty()) {
+                Text(
+                    "Customer price ${money(customerPrice)} kr (${fmt(markupPct)}% markup, only you see this)",
+                    Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             OutlinedButton(
@@ -1124,9 +1143,11 @@ fun SettingsScreen(vm: MainVm) {
     var token by remember { mutableStateOf(prefs.token) }
     var hour by remember { mutableStateOf(prefs.reminderHour.toString()) }
     var minute by remember { mutableStateOf(prefs.reminderMinute.toString().padStart(2, '0')) }
+    var markup by remember { mutableStateOf(fmt(prefs.defaultMarkup.toDouble())) }
     var status by remember { mutableStateOf("") }
 
     fun saveAll() {
+        markup.toNum()?.takeIf { it >= 0 }?.let { prefs.defaultMarkup = it.toFloat() }
         prefs.serverUrl = url
         prefs.token = token
         val h = hour.toIntOrNull()?.coerceIn(0, 23) ?: prefs.reminderHour
@@ -1145,6 +1166,18 @@ fun SettingsScreen(vm: MainVm) {
             OutlinedTextField(minute, { minute = it.take(2) }, label = { Text("Minute") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.weight(1f))
         }
+
+        Spacer(Modifier.height(16.dp))
+        Text("Material markup", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Added to material prices in everything you share with customers. Each job can override it. Never shown to customers.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            markup, { markup = it }, label = { Text("Default markup (%)") }, singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
 
         Spacer(Modifier.height(16.dp))
         Text("Server sync", style = MaterialTheme.typography.titleMedium)
