@@ -16,8 +16,10 @@ Rows from the client are accepted only if their updatedAt is newer than the stor
 import hmac
 import json
 import os
+import shutil
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -151,6 +153,33 @@ def store(db, rows_by_table):
         db.commit()
 
 
+MAX_UPLOAD = 300 * 1024 * 1024
+
+UPLOAD_PAGE = """<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
+<title>SparkLog price list</title>
+<body style="font-family:sans-serif;max-width:30em;margin:1em auto;padding:0 1em">
+<h2>Upload price list</h2>
+<p>Choose the retailer's price file (.xlsx). Importing takes about 20 seconds.</p>
+<input id=token placeholder="Token" style="width:100%;padding:.6em;margin:.3em 0"><br>
+<input id=supplier placeholder="Retailer name (optional)" style="width:100%;padding:.6em;margin:.3em 0"><br>
+<input id=file type=file accept=".xlsx" style="margin:.6em 0"><br>
+<button id=go style="padding:.7em 1.4em;font-size:1em">Upload</button>
+<p id=out></p>
+<script>
+document.getElementById('go').onclick = async () => {
+  const out = document.getElementById('out'), f = document.getElementById('file').files[0];
+  if (!f) { out.textContent = 'Choose a file first.'; return; }
+  out.textContent = 'Uploading and importing, please wait...';
+  try {
+    const r = await fetch('/catalog/upload?supplier=' + encodeURIComponent(document.getElementById('supplier').value),
+      {method: 'POST', body: f, headers: {Authorization: 'Bearer ' + document.getElementById('token').value.trim()}});
+    const j = await r.json();
+    out.textContent = r.ok ? 'Done: ' + j.imported + ' articles imported.' : 'Failed: ' + (j.error || r.status);
+  } catch (e) { out.textContent = 'Failed: ' + e; }
+};
+</script>"""
+
+
 class Handler(BaseHTTPRequestHandler):
     catalog = None  # price list database, opened on first use once one has been imported
     catalog_path = "catalog.db"
@@ -179,6 +208,13 @@ class Handler(BaseHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         if url.path == "/health":
             return self._send(200, {"ok": True})
+        if url.path == "/upload":
+            body = UPLOAD_PAGE.encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            return self.wfile.write(body)
         if url.path in ("/catalog/search", "/catalog/item"):
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
@@ -198,7 +234,39 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"items": catalog.search(Handler.catalog, qs.get("q", [""])[0], limit)})
         self._send(404, {"error": "not found"})
 
+    def _upload_catalog(self, query):
+        """Receives the price list .xlsx (raw request body) and imports it. Used by the /upload page."""
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0 or length > MAX_UPLOAD:
+            return self._send(413, {"error": "bad file size"})
+        supplier = urllib.parse.parse_qs(query).get("supplier", [""])[0][:80]
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            remaining = length
+            while remaining > 0:
+                chunk = self.rfile.read(min(65536, remaining))
+                if not chunk:
+                    break
+                tmp.write(chunk)
+                remaining -= len(chunk)
+        try:
+            with self.catalog_lock:
+                db = catalog.open_db(Handler.catalog_path)
+                try:
+                    n = catalog.import_xlsx(db, tmp.name, supplier)
+                finally:
+                    db.close()
+            self._send(200, {"imported": n})
+        except Exception as e:  # bad file, missing columns, ...
+            self._send(400, {"error": f"could not read the file: {e}"})
+        finally:
+            os.unlink(tmp.name)
+
     def do_POST(self):
+        url = urllib.parse.urlparse(self.path)
+        if url.path == "/catalog/upload":
+            if not self._authorized():
+                return self._send(401, {"error": "unauthorized"})
+            return self._upload_catalog(url.query)
         if self.path != "/sync":
             return self._send(404, {"error": "not found"})
         if not self._authorized():

@@ -157,6 +157,27 @@ def main():
             get("/catalog/item?enr=nope"); raise AssertionError("expected 404")
         except urllib.error.HTTPError as err:
             assert err.code == 404
+        # upload page + upload endpoint (build a tiny xlsx by hand)
+        assert b"Upload price list" in urllib.request.urlopen(BASE + "/upload").read()
+        import zipfile
+        xl = os.path.join(tmp, "p.xlsx")
+        with zipfile.ZipFile(xl, "w") as z:
+            z.writestr("xl/sharedStrings.xml", '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                + "".join(f"<si><t>{x}</t></si>" for x in ["Artnr", "Artben", "Sortkod", "KN", "E9", "TEST ARTICLE", "ST"]) + "</sst>")
+            z.writestr("xl/worksheets/sheet1.xml", '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+                '<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c><c r="D1" t="s"><v>3</v></c></row>'
+                '<row r="2"><c r="A2" t="s"><v>4</v></c><c r="B2" t="s"><v>5</v></c><c r="C2" t="s"><v>6</v></c><c r="D2"><v>1000</v></c></row>'
+                '</sheetData></worksheet>')
+        data = open(xl, "rb").read()
+        up = urllib.request.Request(BASE + "/catalog/upload?supplier=Test", data=data, method="POST",
+                                    headers={"Authorization": f"Bearer {TOKEN}"})
+        assert json.load(urllib.request.urlopen(up))["imported"] == 1
+        assert get("/catalog/item?enr=E9")["net"] == 100.0  # 1000 per 10 units
+        bad = urllib.request.Request(BASE + "/catalog/upload", data=data, method="POST", headers={"Authorization": "Bearer nope"})
+        try:
+            urllib.request.urlopen(bad); raise AssertionError("expected 401")
+        except urllib.error.HTTPError as err:
+            assert err.code == 401
         print("all server tests passed")
     finally:
         proc.terminate()
