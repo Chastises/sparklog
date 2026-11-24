@@ -109,7 +109,7 @@ private fun FormDialog(
 }
 
 /**
- * Dropdown of customers. Finished customers are hidden unless one is already selected.
+ * Dropdown of customers. Inactive customers are hidden unless one is already selected.
  * "+ New customer" opens the customer form and selects the result.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -141,7 +141,7 @@ internal fun CustomerPicker(vm: MainVm, selectedId: String, onSelect: (String) -
             DropdownMenuItem(text = { Text("No customer") }, onClick = { onSelect(""); expanded = false })
             options.forEach { c ->
                 DropdownMenuItem(
-                    text = { Text(c.name + if (c.finished) " (finished)" else "") },
+                    text = { Text(c.name + if (c.finished) " (inactive)" else "") },
                     onClick = { onSelect(c.id); expanded = false },
                 )
             }
@@ -208,14 +208,15 @@ fun CustomerDialog(
         Field("Notes", notes, { notes = it }, singleLine = false)
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Finished")
+                Text(if (finished) "Inactive" else "Active")
                 Text(
-                    if (ongoingJobs > 0) "Can't be finished: $ongoingJobs ongoing job" + (if (ongoingJobs == 1) "" else "s") + ". Finish the job" + (if (ongoingJobs == 1) "" else "s") + " first."
-                    else "Hidden from the customer dropdown",
+                    if (ongoingJobs > 0 && !finished) "Can't be made inactive: $ongoingJobs ongoing job" + (if (ongoingJobs == 1) "" else "s") + ". Finish the job" + (if (ongoingJobs == 1) "" else "s") + " first."
+                    else if (finished) "Hidden from the customer dropdown"
+                    else "Shown in the customer dropdown",
                     style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 )
             }
-            Switch(checked = finished, enabled = ongoingJobs == 0 || finished, onCheckedChange = { finished = it })
+            Switch(checked = !finished, enabled = ongoingJobs == 0 || finished, onCheckedChange = { finished = !it })
         }
     }
 }
@@ -329,7 +330,7 @@ fun JobDialog(
         Field("Call-out fee (kr per visit)", callout, { callout = it }, number = true, isError = !ok(callout))
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Finished")
+                Text("Mark job as finished")
                 Text("Hidden from the job dropdown", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
             Switch(checked = finished, onCheckedChange = { finished = it })

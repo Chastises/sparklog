@@ -391,9 +391,6 @@ fun TodoScreen(vm: MainVm) {
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
-            if (open.isEmpty()) {
-                item { Text("Nothing to do. Tap + to add a to-do.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            }
             items(open, key = { it.id }) { t -> TodoRow(t, names, now, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
             if (done.isNotEmpty()) {
                 item {
@@ -403,6 +400,10 @@ fun TodoScreen(vm: MainVm) {
                 }
                 if (showDone) items(done, key = { it.id }) { t -> TodoRow(t, names, now, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
             }
+        }
+        if (todos.isEmpty()) {
+            Text("No to-dos yet", Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 32.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         FloatingActionButton(
             onClick = { dialog = "new" },
@@ -1182,11 +1183,6 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                 }
             }
 
-            OutlinedButton(
-                onClick = { vm.save(job.copy(finished = !job.finished)) },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-            ) { Text(if (job.finished) "Reopen job" else "Mark job finished") }
-
             SectionHeader("Work", "${fmt(work.sumOf { it.hours })} h") { dialog = "newWork" }
             work.forEach { w ->
                 ListItem(
@@ -1215,6 +1211,19 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
             SectionHeader("To-do", "${todos.count { !it.done }} open") { dialog = "newTodo" }
             todos.forEach { t -> TodoRow(t, names, now, showJob = false, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
             if (todos.isEmpty()) EmptyHint("No to-dos for this job.")
+
+            Spacer(Modifier.height(24.dp))
+            if (job.finished) {
+                OutlinedButton(
+                    onClick = { vm.save(job.copy(finished = false)) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                ) { Text("Reopen job") }
+            } else {
+                Button(
+                    onClick = { vm.save(job.copy(finished = true)) },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                ) { Text("Mark job as finished") }
+            }
         }
     }
 
@@ -1281,7 +1290,7 @@ fun CustomersScreen(vm: MainVm) {
             if (finished.isNotEmpty()) {
                 item {
                     TextButton(onClick = { showFinished = !showFinished }, modifier = Modifier.padding(start = 8.dp)) {
-                        Text(if (showFinished) "Hide finished (${finished.size})" else "Show finished (${finished.size})")
+                        Text(if (showFinished) "Hide inactive (${finished.size})" else "Show inactive (${finished.size})")
                     }
                 }
                 if (showFinished) items(finished, key = { it.id }) { row(it) }
