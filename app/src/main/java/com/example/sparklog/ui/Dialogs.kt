@@ -156,8 +156,8 @@ fun CustomerDialog(
     initial: Customer?,
     onSave: (Customer) -> Unit,
     onDelete: (() -> Unit)?,
-    onDismiss: () -> Unit,
     ongoingJobs: Int = 0,
+    onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var contact by remember { mutableStateOf(initial?.contactPerson ?: "") }
