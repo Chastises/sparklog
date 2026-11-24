@@ -34,6 +34,14 @@ import com.example.sparklog.data.Todo
 import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
 import com.example.sparklog.export.Markup
+import com.example.sparklog.sync.CatalogClient
+import com.example.sparklog.sync.CatalogItem
+import androidx.compose.material3.ListItem
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.clickable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.OutlinedButton
@@ -406,6 +414,8 @@ fun MaterialDialog(
     var supplier by remember { mutableStateOf(initial?.supplier ?: "") }
     var markup by remember { mutableStateOf(initial?.markupPercent?.takeIf { it >= 0 }?.let { fmt(it) } ?: "") }
     val markupOk = markup.isBlank() || (markup.toNum()?.let { it >= 0 } == true)
+    var searching by remember { mutableStateOf(false) }
+    var priceNote by remember { mutableStateOf("") }
     val job = jobs.find { it.id == jobId }
     val jobPct = if (job != null && job.markupPercent >= 0) job.markupPercent else vm.prefs.defaultMarkup.toDouble()
 
@@ -420,6 +430,26 @@ fun MaterialDialog(
                 if (supplier.isBlank()) supplier = prev.supplier
             }
         }
+    }
+
+    if (searching) {
+        PriceListDialog(
+            vm,
+            onPick = { it ->
+                eNumber = it.eNumber
+                name = it.name
+                unit = if (it.unit == "pack" && it.perPack > 1) "pack of ${fmt(it.perPack)}" else it.unit
+                price = if (it.net > 0) "%.2f".format(it.net) else ""
+                priceNote = when {
+                    it.net <= 0 -> "No price in the list for this article - enter it from the invoice."
+                    it.metalSurcharge -> "The list price excludes the copper surcharge - check it against the invoice."
+                    else -> ""
+                }
+                if (supplier.isBlank() && it.supplier.isNotBlank()) supplier = it.supplier
+                searching = false
+            },
+            onDismiss = { searching = false },
+        )
     }
 
     FormDialog(
@@ -443,7 +473,10 @@ fun MaterialDialog(
         }
         Field("Date (yyyy-MM-dd)", date, { date = it }, isError = !validDate(date))
         JobPicker(vm, jobId) { jobId = it }
-        Field("E-number (optional)", eNumber, { eNumber = it }, keyboard = KeyboardType.Number)
+        OutlinedButton(onClick = { searching = true }, modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+            Text("Search price list")
+        }
+        Field("E-number (optional)", eNumber, { eNumber = it })
         Field("Material", name, { name = it })
         Field("Quantity", qty, { qty = it }, number = true, isError = qty.isNotBlank() && qty.toNum() == null)
         Field("Unit (pcs, m, box...)", unit, { unit = it })
@@ -453,6 +486,10 @@ fun MaterialDialog(
             "Markup % (blank = job's ${fmt(jobPct)}%)",
             markup, { markup = it }, number = true, isError = !markupOk,
         )
+        if (priceNote.isNotBlank()) {
+            Text(priceNote, style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+        }
         val unitCost = price.toNum()
         if (unitCost != null && unitCost > 0 && markupOk) {
             val pct = markup.toNum()?.takeIf { it >= 0 } ?: jobPct
@@ -567,4 +604,64 @@ fun TodoDialog(
             dismissButton = { TextButton(onClick = { pickTime = false }) { Text("Cancel") } },
         )
     }
+}
+
+/** Picks an article from the retailer price list on the server and hands it back to the material form. */
+@Composable
+private fun PriceListDialog(vm: MainVm, onPick: (CatalogItem) -> Unit, onDismiss: () -> Unit) {
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<CatalogItem>>(emptyList()) }
+    var message by remember { mutableStateOf("Type a name or E-number") }
+    var busy by remember { mutableStateOf(false) }
+
+    LaunchedEffect(query) {
+        val q = query.trim()
+        if (q.length < 2) { results = emptyList(); message = "Type a name or E-number"; return@LaunchedEffect }
+        delay(350) // wait for the typing to pause; a new keystroke cancels this block
+        busy = true
+        try {
+            val found = withContext(Dispatchers.IO) { CatalogClient.search(vm.prefs, q) }
+            results = found
+            message = if (found.isEmpty()) "No match" else ""
+        } catch (e: Exception) {
+            results = emptyList()
+            message = e.message ?: "Search failed"
+        }
+        busy = false
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Price list") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = query, onValueChange = { query = it }, label = { Text("Search") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (message.isNotBlank()) {
+                    Text(message, style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 8.dp))
+                }
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(top = 4.dp)) {
+                    results.forEach { it ->
+                        ListItem(
+                            headlineContent = { Text(it.name) },
+                            supportingContent = {
+                                Text(
+                                    it.eNumber + " · " +
+                                        (if (it.net > 0) "${"%.2f".format(it.net)} kr/${it.unit}" else "no price") +
+                                        (if (it.metalSurcharge) " + copper surcharge" else "") +
+                                        (if (it.unit == "pack" && it.perPack > 1) " (${fmt(it.perPack)} per pack)" else ""),
+                                )
+                            },
+                            modifier = Modifier.clickable { onPick(it) },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text(if (busy) "Searching…" else "Close") } },
+    )
 }

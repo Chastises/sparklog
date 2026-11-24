@@ -17,9 +17,14 @@ import hmac
 import json
 import os
 import sqlite3
+import sys
 import threading
 import time
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # also under python -I
+import catalog  # noqa: E402
 
 MAX_BODY = 5 * 1024 * 1024
 
@@ -147,6 +152,9 @@ def store(db, rows_by_table):
 
 
 class Handler(BaseHTTPRequestHandler):
+    catalog = None  # price list database, opened on first use once one has been imported
+    catalog_path = "catalog.db"
+    catalog_lock = threading.Lock()
     db = None
     token = ""
     clock = 0
@@ -168,10 +176,27 @@ class Handler(BaseHTTPRequestHandler):
         return hmac.compare_digest(supplied.encode(), self.token.encode())
 
     def do_GET(self):
-        if self.path == "/health":
-            self._send(200, {"ok": True})
-        else:
-            self._send(404, {"error": "not found"})
+        url = urllib.parse.urlparse(self.path)
+        if url.path == "/health":
+            return self._send(200, {"ok": True})
+        if url.path in ("/catalog/search", "/catalog/item"):
+            if not self._authorized():
+                return self._send(401, {"error": "unauthorized"})
+            qs = urllib.parse.parse_qs(url.query)
+            with self.catalog_lock:
+                if Handler.catalog is None and os.path.exists(Handler.catalog_path):
+                    Handler.catalog = catalog.open_db(Handler.catalog_path)  # imported after startup
+                if Handler.catalog is None:
+                    return self._send(404, {"error": "no price list imported on the server"})
+                if url.path == "/catalog/item":
+                    item = catalog.lookup(Handler.catalog, qs.get("enr", [""])[0])
+                    return self._send(200 if item else 404, item or {"error": "not found"})
+                try:
+                    limit = int(qs.get("limit", ["30"])[0])
+                except ValueError:
+                    limit = 30
+                return self._send(200, {"items": catalog.search(Handler.catalog, qs.get("q", [""])[0], limit)})
+        self._send(404, {"error": "not found"})
 
     def do_POST(self):
         if self.path != "/sync":
@@ -207,6 +232,8 @@ def main():
     Handler.db = connect(os.environ.get("SPARKLOG_DB", "sparklog.db"))
     Handler.clock = last_ts(Handler.db)
     db_path = os.environ.get("SPARKLOG_DB", "sparklog.db")
+    cat_path = os.environ.get("SPARKLOG_CATALOG", os.path.join(os.path.dirname(os.path.abspath(db_path)), "catalog.db"))
+    Handler.catalog_path = cat_path
     if os.environ.get("SPARKLOG_IMAP_HOST"):
         import mailimport  # optional: only needed for email invoice import
         mailimport.start_background(db_path, lambda rows: store(Handler.db, rows))

@@ -128,6 +128,35 @@ def main():
             post({"since": 0, "trips": [{"id": "x"}]}); raise AssertionError("expected 400")
         except urllib.error.HTTPError as err:
             assert err.code == 400
+        # price list: 404 before any import, then search/lookup after a (tiny) import
+        def get(path, token=TOKEN):
+            req = urllib.request.Request(BASE + path, headers={"Authorization": f"Bearer {token}"})
+            return json.load(urllib.request.urlopen(req))
+        try:
+            get("/catalog/search?q=kabel"); raise AssertionError("expected 404")
+        except urllib.error.HTTPError as err:
+            assert err.code == 404
+        try:
+            get("/catalog/search?q=kabel", token="wrong"); raise AssertionError("expected 401")
+        except urllib.error.HTTPError as err:
+            assert err.code == 401
+        sys.path.insert(0, here)
+        import catalog
+        db = catalog.open_db(os.path.join(tmp, "catalog.db"))
+        db.executemany("INSERT INTO catalog VALUES (?,?,?,?,?,?,?,?,?,?,?)", [
+            ("E2100012", "MINIBRYTARE S201M-B6UC", "e2100012 minibrytare s201m-b6uc", "pcs", 1, 378.0, 69, 117.18, 0, "2026-11-25", "X"),
+            ("E0001200", "EXQJ PURE 2X2,5/2,5", "e0001200 exqj pure 2x2,5/2,5", "m", 1, 15.5, 69.5, 4.73, 1, "2026-11-25", "X"),
+        ])
+        db.commit()
+        items = get("/catalog/search?q=minibrytare%20s201")["items"]
+        assert [i["eNumber"] for i in items] == ["E2100012"] and items[0]["net"] == 117.18, items
+        assert get("/catalog/search?q=e0001200")["items"][0]["metalSurcharge"] is True
+        assert get("/catalog/item?enr=e2100012")["name"] == "MINIBRYTARE S201M-B6UC"
+        assert get("/catalog/search?q=%25")["items"] == []  # wildcard characters are literal
+        try:
+            get("/catalog/item?enr=nope"); raise AssertionError("expected 404")
+        except urllib.error.HTTPError as err:
+            assert err.code == 404
         print("all server tests passed")
     finally:
         proc.terminate()

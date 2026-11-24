@@ -69,6 +69,16 @@ Supplier invoice layouts differ, and the line parser is heuristic. Test a real i
 
 Tests: `python3 server/test_invoice.py`
 
+## Retailer price list
+
+The retailer's price file (Excel) is imported on the server, not into the app (it has 200,000+ articles). On the server, in the `server` folder:
+
+```
+python3 catalog.py import Prisfil.xlsx --supplier "Retailer name"
+```
+
+This writes `catalog.db` next to the sync database (or set `SPARKLOG_CATALOG`). No restart is needed, and importing a newer file replaces the old list. `python3 catalog.py search "minibrytare s201"` tests it from the shell. In the app, **Add material → Search price list** searches by name or E-number (needs the server URL and token in Settings) and fills in E-number, name, unit and your net price. The net price comes from the file's `KN` column, divided by `PRICE_PER` (10): the file quotes prices per 10 units. If an invoice shows a different price than the app, run the import again with `--price-per 1` (or 100) and compare. Cable lines marked with a copper surcharge in the file get a warning, since the surcharge is not in the list price.
+
 ## Known gaps / next steps
 
 - No export (CSV/PDF for invoicing or tax) yet.
