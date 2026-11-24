@@ -17,7 +17,24 @@ android {
         versionName = "0.1.0"
     }
 
+    // Optional fixed signing key, supplied by CI from a private secret (never committed), so every
+    // build can update the previous one on the phone. Without it the default debug key is used.
+    val keystorePath: String? = System.getenv("SPARKLOG_KEYSTORE_FILE")
+    if (keystorePath != null) {
+        signingConfigs {
+            create("sparklog") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("SPARKLOG_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SPARKLOG_KEY_ALIAS")
+                keyPassword = System.getenv("SPARKLOG_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (keystorePath != null) signingConfig = signingConfigs.getByName("sparklog")
+        }
         release {
             isMinifyEnabled = false
         }

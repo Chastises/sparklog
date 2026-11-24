@@ -17,6 +17,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
+      - name: Restore signing key (if the secret exists)
+        env:
+          KS: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/sparklog.keystore"
+            echo "SPARKLOG_KEYSTORE_FILE=$RUNNER_TEMP/sparklog.keystore" >> "$GITHUB_ENV"
+            echo "SPARKLOG_KEYSTORE_PASSWORD=sparklog" >> "$GITHUB_ENV"
+            echo "SPARKLOG_KEY_ALIAS=sparklog" >> "$GITHUB_ENV"
+          else
+            echo "No signing secret set; using the default debug key"
+          fi
       - run: gradle assembleDebug --stacktrace
       - name: Publish release
         env:
