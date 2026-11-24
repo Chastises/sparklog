@@ -207,8 +207,7 @@ fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit, onOpenJob: (Stri
                     onClick = { onSection(i) },
                     shape = SegmentedButtonDefaults.itemShape(index = i, count = titles.size),
                     icon = {},
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp),
-                ) { Text(title, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelMedium) }
+                ) { Text(title, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
