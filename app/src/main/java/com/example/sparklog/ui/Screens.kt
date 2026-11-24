@@ -613,7 +613,7 @@ private fun MaterialRow(m: Material, names: Map<String, String>, showDate: Boole
     val ref = m.jobId.ifBlank { m.customerId }
     val details = listOfNotNull(
         if (showDate) m.date else null,
-        if (m.eNumber.isNotBlank()) "E-nr ${m.eNumber}" else "NO E-NR",
+        if (m.eNumber.isNotBlank()) "E-nr ${m.eNumber}" else null,
         if (!showJob) null else if (ref.isNotBlank()) customerLabel(names, ref, "") else if (m.source == "invoice") "NEEDS JOB" else null,
         if (m.unitPrice > 0) "${money(m.quantity * m.unitPrice)} kr" else null,
         m.supplier.ifBlank { null },
@@ -758,7 +758,7 @@ fun MaterialsScreen(vm: MainVm, onOpenMaterials: (String) -> Unit) {
 private fun CostedMaterialRow(m: Material, jobPct: Double, onClick: () -> Unit) {
     val eff = Markup.effective(m, jobPct)
     val details = listOfNotNull(
-        if (m.eNumber.isNotBlank()) "E-nr ${m.eNumber}" else "NO E-NR",
+        if (m.eNumber.isNotBlank()) "E-nr ${m.eNumber}" else null,
         m.supplier.ifBlank { null },
         if (m.unitPrice > 0) "cost ${money(Markup.cost(m))} kr" else null,
         if (m.unitPrice > 0) "+${fmt(eff)}%" + if (m.markupPercent >= 0) " (set on this line)" else "" else null,

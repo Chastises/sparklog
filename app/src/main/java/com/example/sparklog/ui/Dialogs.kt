@@ -418,7 +418,7 @@ fun MaterialDialog(
 
     FormDialog(
         title = if (initial == null) "Add material" else "Edit material",
-        canSave = eNumber.isNotBlank() && validDate(date) && name.isNotBlank() && qty.toNum() != null && (price.isBlank() || price.toNum() != null) && markupOk,
+        canSave = validDate(date) && name.isNotBlank() && qty.toNum() != null && (price.isBlank() || price.toNum() != null) && markupOk,
         onSave = {
             val base = initial ?: Material(date = date.trim(), name = name.trim())
             val customer = jobs.find { it.id == jobId }?.customerId ?: base.customerId
@@ -437,7 +437,7 @@ fun MaterialDialog(
         }
         Field("Date (yyyy-MM-dd)", date, { date = it }, isError = !validDate(date))
         JobPicker(vm, jobId) { jobId = it }
-        Field("E-number", eNumber, { eNumber = it }, keyboard = KeyboardType.Number, isError = eNumber.isBlank())
+        Field("E-number (optional)", eNumber, { eNumber = it }, keyboard = KeyboardType.Number)
         Field("Material", name, { name = it })
         Field("Quantity", qty, { qty = it }, number = true, isError = qty.isNotBlank() && qty.toNum() == null)
         Field("Unit (pcs, m, box...)", unit, { unit = it })
