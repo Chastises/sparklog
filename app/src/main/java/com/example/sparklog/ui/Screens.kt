@@ -1404,8 +1404,15 @@ fun SettingsScreen(vm: MainVm) {
         Text("Your own server, for example http://192.168.1.50:8787", color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(url, { url = it }, label = { Text("Server URL") }, singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-        OutlinedTextField(token, { token = it }, label = { Text("Token") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+        var showToken by remember { mutableStateOf(false) }
+        OutlinedTextField(
+            token, { token = it }, label = { Text("Token") }, singleLine = true,
+            visualTransformation = if (showToken) androidx.compose.ui.text.input.VisualTransformation.None
+                else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = { TextButton(onClick = { showToken = !showToken }) { Text(if (showToken) "Hide" else "Show") } },
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+        )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
             Button(onClick = { saveAll(); status = "Saved" }) { Text("Save") }
