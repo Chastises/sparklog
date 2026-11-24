@@ -121,6 +121,9 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE deleted = 0 AND date BETWEEN :from AND :to")
     fun observeRange(from: String, to: String): Flow<List<Trip>>
 
+    @Query("SELECT * FROM trips WHERE deleted = 0")
+    fun observeAll(): Flow<List<Trip>>
+
     @Query("SELECT * FROM trips WHERE deleted = 0 ORDER BY date DESC, updatedAt DESC LIMIT 200")
     fun observeRecent(): Flow<List<Trip>>
 

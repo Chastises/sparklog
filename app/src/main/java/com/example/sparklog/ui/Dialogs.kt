@@ -307,10 +307,11 @@ fun WorkDialog(
     date: String,
     onSave: (WorkEntry) -> Unit,
     onDelete: (() -> Unit)?,
+    defaultJobId: String = "",
     onDismiss: () -> Unit,
 ) {
     val jobs by vm.jobs.collectAsState(emptyList())
-    var jobId by remember { mutableStateOf(initial?.jobId ?: "") }
+    var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
     var description by remember { mutableStateOf(initial?.description ?: "") }
     var hours by remember { mutableStateOf(initial?.let { fmt(it.hours) } ?: "") }
     FormDialog(
@@ -337,11 +338,12 @@ fun TripDialog(
     defaultDate: String,
     onSave: (Trip) -> Unit,
     onDelete: (() -> Unit)?,
+    defaultJobId: String = "",
     onDismiss: () -> Unit,
 ) {
     val jobs by vm.jobs.collectAsState(emptyList())
     var date by remember { mutableStateOf(initial?.date ?: defaultDate) }
-    var jobId by remember { mutableStateOf(initial?.jobId ?: "") }
+    var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
     var from by remember { mutableStateOf(initial?.fromPlace ?: "") }
     var to by remember { mutableStateOf(initial?.toPlace ?: "") }
     var km by remember { mutableStateOf(initial?.let { fmt(it.km) } ?: "") }
@@ -374,11 +376,12 @@ fun MaterialDialog(
     defaultDate: String,
     onSave: (Material) -> Unit,
     onDelete: (() -> Unit)?,
+    defaultJobId: String = "",
     onDismiss: () -> Unit,
 ) {
     val jobs by vm.jobs.collectAsState(emptyList())
     var date by remember { mutableStateOf(initial?.date ?: defaultDate) }
-    var jobId by remember { mutableStateOf(initial?.jobId ?: "") }
+    var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var qty by remember { mutableStateOf(initial?.let { fmt(it.quantity) } ?: "1") }
     var unit by remember { mutableStateOf(initial?.unit ?: "pcs") }
@@ -426,11 +429,12 @@ fun TodoDialog(
     initial: Todo?,
     onSave: (Todo) -> Unit,
     onDelete: (() -> Unit)?,
+    defaultJobId: String = "",
     onDismiss: () -> Unit,
 ) {
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var notes by remember { mutableStateOf(initial?.notes ?: "") }
-    var jobId by remember { mutableStateOf(initial?.jobId ?: "") }
+    var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
     var due by remember { mutableStateOf(dueToDateTime(initial?.dueAt ?: 0L)) }
     var pickDate by remember { mutableStateOf(false) }
     var pickTime by remember { mutableStateOf(false) }

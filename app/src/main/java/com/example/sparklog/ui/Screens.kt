@@ -1,6 +1,8 @@
 package com.example.sparklog.ui
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
@@ -103,12 +106,19 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
     var tab by rememberSaveable { mutableIntStateOf(if (initialTab == "todo") 3 else 0) }
     var jobsSection by rememberSaveable { mutableIntStateOf(0) } // 0 jobs, 1 customers, 2 drive, 3 materials
     var day by rememberSaveable { mutableStateOf(initialDay?.toString()) }
+    var openJob by rememberSaveable { mutableStateOf<String?>(null) }
     var sub by rememberSaveable { mutableStateOf<String?>(null) } // only "settings"
 
     val selected = day
     if (selected != null) {
         BackHandler { day = null }
         DayScreen(vm, LocalDate.parse(selected), onBack = { day = null })
+        return
+    }
+    val jobToShow = openJob
+    if (jobToShow != null) {
+        BackHandler { openJob = null }
+        JobDetailScreen(vm, jobToShow, onBack = { openJob = null })
         return
     }
     val subScreen = sub
@@ -159,7 +169,7 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
                     onOpenJobs = { section -> jobsSection = section; tab = 2 },
                 )
                 1 -> CalendarScreen(vm, onOpenDay = { day = it.toString() })
-                2 -> JobsHub(vm, jobsSection) { jobsSection = it }
+                2 -> JobsHub(vm, jobsSection, onSection = { jobsSection = it }, onOpenJob = { openJob = it })
                 else -> TodoScreen(vm)
             }
         }
@@ -170,7 +180,7 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
 
 /** Everything that hangs off a job lives here: jobs, customers, driving and materials. */
 @Composable
-fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit) {
+fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit, onOpenJob: (String) -> Unit) {
     val titles = listOf("Jobs", "Customers", "Drive", "Materials")
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -183,7 +193,7 @@ fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit) {
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (section) {
-                0 -> JobsScreen(vm)
+                0 -> JobsScreen(vm, onOpenJob)
                 1 -> CustomersScreen(vm)
                 2 -> DriveScreen(vm)
                 else -> MaterialsScreen(vm)
@@ -360,10 +370,10 @@ fun TodoScreen(vm: MainVm) {
 }
 
 @Composable
-private fun TodoRow(t: Todo, names: Map<String, String>, now: Long, onToggle: () -> Unit, onClick: () -> Unit) {
+private fun TodoRow(t: Todo, names: Map<String, String>, now: Long, showJob: Boolean = true, onToggle: () -> Unit, onClick: () -> Unit) {
     val due = dueToDateTime(t.dueAt)?.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM HH:mm", Locale.ENGLISH))
     val overdue = !t.done && t.dueAt in 1 until now
-    val job = if (t.jobId.isNotBlank()) customerLabel(names, t.jobId, "") else ""
+    val job = if (showJob && t.jobId.isNotBlank()) customerLabel(names, t.jobId, "") else ""
     ListItem(
         leadingContent = { Checkbox(checked = t.done, onCheckedChange = { onToggle() }) },
         headlineContent = {
@@ -570,11 +580,11 @@ private fun EmptyHint(text: String) {
 }
 
 @Composable
-private fun TripRow(t: Trip, names: Map<String, String>, showDate: Boolean, onClick: () -> Unit) {
+private fun TripRow(t: Trip, names: Map<String, String>, showDate: Boolean, showJob: Boolean = true, onClick: () -> Unit) {
     val route = listOf(t.fromPlace, t.toPlace).filter { it.isNotBlank() }.joinToString(" → ").ifBlank { "Trip" }
     val details = listOfNotNull(
         if (showDate) t.date else null,
-        t.jobId.ifBlank { t.customerId }.takeIf { it.isNotBlank() }?.let { customerLabel(names, it, "") },
+        if (showJob) t.jobId.ifBlank { t.customerId }.takeIf { it.isNotBlank() }?.let { customerLabel(names, it, "") } else null,
         t.purpose.ifBlank { null },
         if (t.source == "gps") "GPS" else null,
     ).joinToString(" · ")
@@ -586,11 +596,11 @@ private fun TripRow(t: Trip, names: Map<String, String>, showDate: Boolean, onCl
 }
 
 @Composable
-private fun MaterialRow(m: Material, names: Map<String, String>, showDate: Boolean, onClick: () -> Unit) {
+private fun MaterialRow(m: Material, names: Map<String, String>, showDate: Boolean, showJob: Boolean = true, onClick: () -> Unit) {
     val ref = m.jobId.ifBlank { m.customerId }
     val details = listOfNotNull(
         if (showDate) m.date else null,
-        if (ref.isNotBlank()) customerLabel(names, ref, "") else if (m.source == "invoice") "NEEDS JOB" else null,
+        if (!showJob) null else if (ref.isNotBlank()) customerLabel(names, ref, "") else if (m.source == "invoice") "NEEDS JOB" else null,
         if (m.unitPrice > 0) "${money(m.quantity * m.unitPrice)} kr" else null,
         m.supplier.ifBlank { null },
     ).joinToString(" · ")
@@ -706,7 +716,7 @@ fun MaterialsScreen(vm: MainVm) {
 // ---------------------------------------------------------------- jobs
 
 @Composable
-fun JobsScreen(vm: MainVm) {
+fun JobsScreen(vm: MainVm, onOpenJob: (String) -> Unit) {
     val jobs by vm.jobs.collectAsState(emptyList())
     val customers by vm.customers.collectAsState(emptyList())
     val work by vm.allWork.collectAsState(emptyList())
@@ -727,7 +737,7 @@ fun JobsScreen(vm: MainVm) {
             headlineContent = { Text(jobLabel(j, custNames)) },
             supportingContent = { if (cost > 0) Text("Materials: ${money(cost)} kr") },
             trailingContent = { Text("${fmt(hoursByJob[j.id] ?: 0.0)} h") },
-            modifier = Modifier.clickable { dialog = j },
+            modifier = Modifier.clickable { onOpenJob(j.id) },
         )
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
@@ -755,8 +765,147 @@ fun JobsScreen(vm: MainVm) {
 
     when (val d = dialog) {
         "newJob" -> JobDialog(vm, null, { vm.save(it); dialog = null }, null) { dialog = null }
-        is Job -> JobDialog(vm, d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
         else -> Unit
+    }
+}
+
+// ---------------------------------------------------------------- job overview
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
+    val context = LocalContext.current
+    val jobs: List<Job>? by vm.jobs.collectAsState(initial = null)
+    val customers by vm.customers.collectAsState(emptyList())
+    val allWork by vm.allWork.collectAsState(emptyList())
+    val allTrips by vm.allTrips.collectAsState(emptyList())
+    val allMaterials by vm.allMaterials.collectAsState(emptyList())
+    val allTodos by vm.todos.collectAsState(emptyList())
+    val names = rememberNames(vm)
+    var dialog by remember { mutableStateOf<Any?>(null) }
+
+    val job = jobs?.find { it.id == jobId }
+    if (jobs != null && job == null) { // deleted
+        LaunchedEffect(Unit) { onBack() }
+        return
+    }
+    if (job == null) return
+
+    val customer = customers.find { it.id == job.customerId }
+    val work = allWork.filter { it.jobId == jobId }.sortedByDescending { it.date }
+    val trips = allTrips.filter { it.jobId == jobId }.sortedByDescending { it.date }
+    val materials = allMaterials.filter { it.jobId == jobId }.sortedByDescending { it.date }
+    val todos = allTodos.filter { it.jobId == jobId }.sortedWith(compareBy({ it.done }, { if (it.dueAt > 0) 0 else 1 }, { it.dueAt }))
+    val cost = materials.sumOf { it.quantity * it.unitPrice }
+    val now = System.currentTimeMillis()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Job #${job.number}") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                actions = { IconButton(onClick = { dialog = "editJob" }) { Icon(Icons.Default.Edit, "Edit job") } },
+            )
+        },
+    ) { padding ->
+        Column(
+            Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 32.dp),
+        ) {
+            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(job.title.ifBlank { "Job #${job.number}" }, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        if (job.finished) "Finished" else "Ongoing",
+                        color = if (job.finished) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    if (customer != null) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(customer.name, style = MaterialTheme.typography.titleMedium)
+                        if (customer.contactPerson.isNotBlank()) Text(customer.contactPerson)
+                        val place = listOf(customer.address, listOf(customer.postalCode, customer.city).filter { it.isNotBlank() }.joinToString(" "))
+                            .filter { it.isNotBlank() }.joinToString(", ")
+                        if (place.isNotBlank()) Text(place)
+                        if (customer.propertyId.isNotBlank()) Text("Property: ${customer.propertyId}")
+                        if (customer.orgNumber.isNotBlank()) Text("ID: ${customer.orgNumber}")
+                        Row {
+                            if (customer.phone.isNotBlank()) {
+                                TextButton(onClick = {
+                                    context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + customer.phone)))
+                                }) { Text("Call ${customer.phone}") }
+                            }
+                            if (customer.email.isNotBlank()) {
+                                TextButton(onClick = {
+                                    context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:" + customer.email)))
+                                }) { Text("Email") }
+                            }
+                        }
+                        if (customer.notes.isNotBlank()) Text(customer.notes, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        Text("No customer set. Tap the pencil to choose one.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Stat("Hours", fmt(work.sumOf { it.hours }))
+                    Stat("Driven", fmt(trips.sumOf { it.km }) + " km")
+                    Stat("Materials", money(cost) + " kr")
+                }
+            }
+
+            OutlinedButton(
+                onClick = { vm.save(job.copy(finished = !job.finished)) },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            ) { Text(if (job.finished) "Reopen job" else "Mark job finished") }
+
+            SectionHeader("Work", "${fmt(work.sumOf { it.hours })} h") { dialog = "newWork" }
+            work.forEach { w ->
+                ListItem(
+                    headlineContent = { Text("${w.date} · ${fmt(w.hours)} h") },
+                    supportingContent = { if (w.description.isNotBlank()) Text(w.description) },
+                    modifier = Modifier.clickable { dialog = w },
+                )
+            }
+            if (work.isEmpty()) EmptyHint("No hours logged on this job.")
+
+            SectionHeader("Driving", "${fmt(trips.sumOf { it.km })} km") { dialog = "newTrip" }
+            trips.forEach { t -> TripRow(t, names, showDate = true, showJob = false) { dialog = t } }
+            if (trips.isEmpty()) EmptyHint("No trips.")
+
+            SectionHeader("Materials", "${money(cost)} kr") { dialog = "newMat" }
+            materials.forEach { m -> MaterialRow(m, names, showDate = true, showJob = false) { dialog = m } }
+            if (materials.isEmpty()) EmptyHint("No materials.")
+
+            SectionHeader("To-do", "${todos.count { !it.done }} open") { dialog = "newTodo" }
+            todos.forEach { t -> TodoRow(t, names, now, showJob = false, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
+            if (todos.isEmpty()) EmptyHint("No to-dos for this job.")
+        }
+    }
+
+    val today = LocalDate.now().toString()
+    when (val d = dialog) {
+        "editJob" -> JobDialog(
+            vm, job, { vm.save(it); dialog = null }, { vm.delete(job); dialog = null },
+        ) { dialog = null }
+        "newWork" -> WorkDialog(vm, null, today, { vm.save(it); dialog = null }, null, defaultJobId = jobId) { dialog = null }
+        is WorkEntry -> WorkDialog(vm, d, d.date, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
+        "newTrip" -> TripDialog(vm, null, today, { vm.save(it); dialog = null }, null, defaultJobId = jobId) { dialog = null }
+        is Trip -> TripDialog(vm, d, today, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
+        "newMat" -> MaterialDialog(vm, null, today, { vm.save(it); dialog = null }, null, defaultJobId = jobId) { dialog = null }
+        is Material -> MaterialDialog(vm, d, today, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
+        "newTodo" -> TodoDialog(vm, null, { vm.save(it); dialog = null }, null, defaultJobId = jobId) { dialog = null }
+        is Todo -> TodoDialog(vm, d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
+        else -> Unit
+    }
+}
+
+@Composable
+private fun Stat(label: String, value: String) {
+    Column {
+        Text(value, style = MaterialTheme.typography.titleMedium)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

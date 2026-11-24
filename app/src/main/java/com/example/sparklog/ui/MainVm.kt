@@ -54,6 +54,7 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
     }
     fun delete(j: Job) = launchSync { db.jobs().upsert(j.copy(deleted = true, updatedAt = now())) }
     val allWork = db.work().observeAll()
+    val allTrips = db.trips().observeAll()
 
     fun save(c: Customer) = launchSync { db.customers().upsert(c.copy(updatedAt = now())) }
     fun delete(c: Customer) = launchSync { db.customers().upsert(c.copy(deleted = true, updatedAt = now())) }
