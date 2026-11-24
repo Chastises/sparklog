@@ -708,9 +708,6 @@ fun DriveScreen(vm: MainVm) {
         if (result.values.any { it }) TripTrackingService.start(context, purpose, tripJob)
     }
 
-    val monthPrefix = YearMonth.now().toString()
-    val monthKm = trips.filter { it.date.startsWith(monthPrefix) }.sumOf { it.km }
-
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
             item {
@@ -742,8 +739,6 @@ fun DriveScreen(vm: MainVm) {
                             Spacer(Modifier.height(8.dp))
                             Button(onClick = { TripTrackingService.stop(context) }) { Text("Stop and save trip") }
                         }
-                        Spacer(Modifier.height(8.dp))
-                        Text("This month: ${fmt(monthKm)} km", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -788,14 +783,6 @@ fun MaterialsScreen(vm: MainVm, onOpenMaterials: (String) -> Unit) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
             if (materials.isEmpty()) {
                 item { EmptyHint("No materials yet. Tap + to add some, or import supplier invoices.") }
-            } else {
-                item {
-                    Text(
-                        "Total ${money(total)} kr on ${rows.size} job" + if (rows.size == 1) "" else "s",
-                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
             }
             if (unassigned.isNotEmpty()) {
                 item {
@@ -821,6 +808,15 @@ fun MaterialsScreen(vm: MainVm, onOpenMaterials: (String) -> Unit) {
                     value = "${money(lines.sumOf { it.quantity * it.unitPrice })} kr",
                     onClick = { onOpenMaterials(j.id) },
                 )
+            }
+            if (materials.isNotEmpty()) {
+                item {
+                    Text(
+                        "Total ${money(total)} kr on ${rows.size} job" + if (rows.size == 1) "" else "s",
+                        Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                }
             }
         }
         FloatingActionButton(
@@ -990,9 +986,6 @@ fun JobsScreen(vm: MainVm, onOpenJob: (String) -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
-            if (ongoing.isEmpty()) {
-                item { EmptyHint("No ongoing jobs. Tap + to add one.") }
-            }
             items(ongoing, key = { it.id }) { row(it) }
             if (finished.isNotEmpty()) {
                 item {
@@ -1002,6 +995,10 @@ fun JobsScreen(vm: MainVm, onOpenJob: (String) -> Unit) {
                 }
                 if (showFinished) items(finished, key = { it.id }) { row(it) }
             }
+        }
+        if (jobs.isEmpty()) {
+            Text("No jobs yet", Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 32.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         FloatingActionButton(
             onClick = { dialog = "newJob" },
@@ -1036,7 +1033,10 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
         LaunchedEffect(Unit) { onBack() }
         return
     }
-    if (job == null) return
+    if (job == null) { // still loading: show the page background instead of a blank (white) frame
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+        return
+    }
 
     val customer = customers.find { it.id == job.customerId }
     val work = allWork.filter { it.jobId == jobId }.sortedByDescending { it.date }
@@ -1277,9 +1277,6 @@ fun CustomersScreen(vm: MainVm) {
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
-            if (ongoing.isEmpty()) {
-                item { EmptyHint("No ongoing customers. Tap + to add one.") }
-            }
             items(ongoing, key = { it.id }) { row(it) }
             if (finished.isNotEmpty()) {
                 item {
@@ -1289,6 +1286,10 @@ fun CustomersScreen(vm: MainVm) {
                 }
                 if (showFinished) items(finished, key = { it.id }) { row(it) }
             }
+        }
+        if (customers.isEmpty()) {
+            Text("No customers yet", Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 32.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         FloatingActionButton(
             onClick = { dialog = "new" },
