@@ -33,6 +33,7 @@ import com.example.sparklog.data.Material
 import com.example.sparklog.data.Todo
 import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
+import com.example.sparklog.export.Markup
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.OutlinedButton
@@ -452,7 +453,7 @@ fun MaterialDialog(
             val pct = markup.toNum()?.takeIf { it >= 0 } ?: jobPct
             val customerUnit = Math.round(unitCost * (1.0 + pct / 100.0) * 100.0) / 100.0
             Text(
-                "Customer price per unit: ${"%.2f".format(customerUnit)} kr",
+                "Customer price per unit: ${"%.2f".format(customerUnit)} kr ex VAT, ${"%.2f".format(Markup.withVat(customerUnit))} kr incl. 25% VAT",
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp),
             )

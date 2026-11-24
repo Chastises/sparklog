@@ -34,7 +34,7 @@ class Prefs(context: Context) {
 
     /** Default markup on material prices, in percent. Jobs can override it. Never shown to customers. */
     var defaultMarkup: Float
-        get() = sp.getFloat("defaultMarkup", 0f)
+        get() = sp.getFloat("defaultMarkup", 30f)
         set(v) = sp.edit().putFloat("defaultMarkup", v).apply()
 
     /** Free-text note shown on the home screen (stored on this phone only). */

@@ -766,7 +766,16 @@ private fun CostedMaterialRow(m: Material, jobPct: Double, onClick: () -> Unit) 
     ListItem(
         headlineContent = { Text("${m.name} · ${fmt(m.quantity)} ${m.unit}") },
         supportingContent = { if (details.isNotBlank()) Text(details) },
-        trailingContent = { if (m.unitPrice > 0) Text("${money(Markup.lineTotal(m, jobPct))} kr") },
+        trailingContent = {
+            if (m.unitPrice > 0) {
+                val ex = Markup.lineTotal(m, jobPct)
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("${money(ex)} kr")
+                    Text("${money(Markup.withVat(ex))} incl. VAT", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
         modifier = Modifier.clickable(onClick = onClick),
     )
 }
@@ -814,7 +823,8 @@ fun JobMaterialsScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
                     )
                     if (!unassigned) {
                         Text(
-                            "Customer price ${money(lines.sumOf { Markup.lineTotal(it, pct) })} kr (${fmt(pct)}% markup)",
+                            "Customer price ${money(lines.sumOf { Markup.lineTotal(it, pct) })} kr ex VAT · " +
+                                "${money(Markup.withVat(lines.sumOf { Markup.lineTotal(it, pct) }))} kr incl. 25% VAT (${fmt(pct)}% markup)",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -1038,6 +1048,11 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                             Stat("Profit", money(profit) + " kr")
                         }
                         if (customerPrice > 0) {
+                            Text(
+                                "Customer price incl. 25% VAT: ${money(Markup.withVat(customerPrice))} kr",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
                             Text(
                                 "Margin ${fmt(Math.round(profit / customerPrice * 1000.0) / 10.0)}% of the customer price. Job markup ${fmt(markupPct)}%.",
                                 style = MaterialTheme.typography.bodySmall,

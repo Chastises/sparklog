@@ -40,6 +40,9 @@ object Markup {
     fun unitPrice(m: Material, jobPct: Double) = round2(m.unitPrice * (1.0 + effective(m, jobPct) / 100.0))
     fun lineTotal(m: Material, jobPct: Double) = round2(m.quantity * unitPrice(m, jobPct))
     fun cost(m: Material) = round2(m.quantity * m.unitPrice)
+    /** Swedish VAT (moms) on materials. */
+    const val VAT_PERCENT = 25.0
+    fun withVat(exVat: Double) = round2(exVat * (1.0 + VAT_PERCENT / 100.0))
     fun profit(m: Material, jobPct: Double) = round2(lineTotal(m, jobPct) - cost(m))
 }
 
@@ -89,7 +92,7 @@ object JobExport {
         w.gap(8f)
         w.text(
             "Hours: ${num(d.work.sumOf { it.hours })}     Driven: ${num(d.trips.sumOf { it.km })} km     " +
-                "Materials: ${money(matTotal)} kr (ex VAT)",
+                "Materials: ${money(matTotal)} kr ex VAT (${money(Markup.withVat(matTotal))} incl. VAT)",
             w.bold,
         )
 
@@ -108,7 +111,9 @@ object JobExport {
         }
         if (d.materials.isNotEmpty()) {
             w.gap(6f)
-            w.row("Total materials", "", "", money(matTotal), w.boldSmall)
+            w.row("Total materials (ex VAT)", "", "", money(matTotal), w.boldSmall)
+            w.row("VAT ${num(Markup.VAT_PERCENT)}%", "", "", money(Markup.withVat(matTotal) - matTotal), w.small)
+            w.row("Total materials (incl. VAT)", "", "", money(Markup.withVat(matTotal)), w.boldSmall)
         }
 
         // ---- hours
