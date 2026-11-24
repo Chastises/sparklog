@@ -34,7 +34,7 @@ This code was written without an Android SDK available, so it has **not been com
 Stdlib Python 3.9+, no packages. In a small LXC or VM:
 
 ```
-mkdir -p /opt/sparklog && cp server.py /opt/sparklog/
+mkdir -p /opt/sparklog && cp server/*.py /opt/sparklog/
 export SPARKLOG_TOKEN="$(openssl rand -hex 24)"   # keep this, it goes in the app
 SPARKLOG_DB=/opt/sparklog/sparklog.db python3 /opt/sparklog/server.py
 ```
