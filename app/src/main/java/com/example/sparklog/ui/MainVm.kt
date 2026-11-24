@@ -13,7 +13,9 @@ import com.example.sparklog.todo.TodoScheduler
 import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
 import com.example.sparklog.sync.SyncWorker
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.YearMonth
 
 class MainVm(private val app: Application) : AndroidViewModel(app) {
@@ -82,7 +84,7 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
     /** Manual sync for the settings screen. Returns null on success or an error message. */
     suspend fun syncNow(): String? = try {
         if (prefs.serverUrl.isBlank() || prefs.token.isBlank()) "Enter server URL and token first"
-        else { SyncWorker.sync(app, prefs); null }
+        else { withContext(Dispatchers.IO) { SyncWorker.sync(app, prefs) }; null }
     } catch (e: Exception) {
         e.message ?: e.javaClass.simpleName
     }

@@ -1209,8 +1209,8 @@ fun SettingsScreen(vm: MainVm) {
 
     fun saveAll() {
         markup.toNum()?.takeIf { it >= 0 }?.let { prefs.defaultMarkup = it.toFloat() }
-        prefs.serverUrl = url
-        prefs.token = token
+        prefs.serverUrl = url.trim().trimEnd('/')
+        prefs.token = token.trim()
         val h = hour.toIntOrNull()?.coerceIn(0, 23) ?: prefs.reminderHour
         val m = minute.toIntOrNull()?.coerceIn(0, 59) ?: prefs.reminderMinute
         prefs.reminderHour = h
