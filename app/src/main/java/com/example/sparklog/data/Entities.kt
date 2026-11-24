@@ -36,6 +36,10 @@ data class Job(
     val finished: Boolean = false,
     /** Material markup in percent for this job; negative = use the default from Settings. */
     val markupPercent: Double = -1.0,
+    /** Rates for this job, fixed when it is created (negative = not fixed yet, follows Settings). */
+    val hourlyRate: Double = -1.0,
+    val ratePer10Km: Double = -1.0,
+    val calloutFee: Double = -1.0,
     val updatedAt: Long = System.currentTimeMillis(),
     val deleted: Boolean = false,
 )

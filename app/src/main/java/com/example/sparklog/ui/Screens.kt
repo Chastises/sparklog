@@ -975,13 +975,13 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                             DropdownMenuItem(text = { Text("Share job summary (PDF)") }, onClick = {
                                 shareMenu = false
                                 val data = JobExportData(job, customer, work, trips, materials, markupPct,
-                                    vm.prefs.hourlyRate.toDouble(), vm.prefs.ratePer10Km.toDouble(), vm.prefs.calloutFee.toDouble())
+                                    (if (job.hourlyRate >= 0) job.hourlyRate else vm.prefs.hourlyRate.toDouble()), (if (job.ratePer10Km >= 0) job.ratePer10Km else vm.prefs.ratePer10Km.toDouble()), (if (job.calloutFee >= 0) job.calloutFee else vm.prefs.calloutFee.toDouble()))
                                 JobExport.share(context, JobExport.pdf(context, data), "application/pdf", "Job #${job.number}")
                             })
                             DropdownMenuItem(text = { Text("Share materials (CSV)") }, onClick = {
                                 shareMenu = false
                                 val data = JobExportData(job, customer, work, trips, materials, markupPct,
-                                    vm.prefs.hourlyRate.toDouble(), vm.prefs.ratePer10Km.toDouble(), vm.prefs.calloutFee.toDouble())
+                                    (if (job.hourlyRate >= 0) job.hourlyRate else vm.prefs.hourlyRate.toDouble()), (if (job.ratePer10Km >= 0) job.ratePer10Km else vm.prefs.ratePer10Km.toDouble()), (if (job.calloutFee >= 0) job.calloutFee else vm.prefs.calloutFee.toDouble()))
                                 JobExport.share(context, JobExport.csv(context, data), "text/csv", "Job #${job.number} materials")
                             })
                         }
@@ -1039,7 +1039,7 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
             }
             run {
                 val d = JobExportData(job, customer, work, trips, materials, markupPct,
-                    vm.prefs.hourlyRate.toDouble(), vm.prefs.ratePer10Km.toDouble(), vm.prefs.calloutFee.toDouble())
+                    (if (job.hourlyRate >= 0) job.hourlyRate else vm.prefs.hourlyRate.toDouble()), (if (job.ratePer10Km >= 0) job.ratePer10Km else vm.prefs.ratePer10Km.toDouble()), (if (job.calloutFee >= 0) job.calloutFee else vm.prefs.calloutFee.toDouble()))
                 if (d.totalExVat > 0) {
                     Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                         Column(Modifier.padding(16.dp)) {
@@ -1060,8 +1060,8 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                             Spacer(Modifier.height(4.dp))
                             line("Total ex VAT", d.totalExVat, bold = true)
                             line("Total incl. 25% VAT", Markup.withVat(d.totalExVat), bold = true)
-                            if (vm.prefs.hourlyRate <= 0f && work.isNotEmpty()) {
-                                Text("Set your hourly rate in Settings to include work.", style = MaterialTheme.typography.bodySmall,
+                            if (d.labour <= 0 && work.isNotEmpty()) {
+                                Text("No hourly rate on this job. Edit the job to set one.", style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
                             }
                         }
@@ -1244,10 +1244,20 @@ fun SettingsScreen(vm: MainVm) {
     var status by remember { mutableStateOf("") }
 
     fun saveAll() {
-        markup.toNum()?.takeIf { it >= 0 }?.let { prefs.defaultMarkup = it.toFloat() }
-        hourly.toNum()?.takeIf { it >= 0 }?.let { prefs.hourlyRate = it.toFloat() }
-        per10.toNum()?.takeIf { it >= 0 }?.let { prefs.ratePer10Km = it.toFloat() }
-        callout.toNum()?.takeIf { it >= 0 }?.let { prefs.calloutFee = it.toFloat() }
+        val newMarkup = markup.toNum()?.takeIf { it >= 0 }?.toFloat() ?: prefs.defaultMarkup
+        val newHourly = hourly.toNum()?.takeIf { it >= 0 }?.toFloat() ?: prefs.hourlyRate
+        val newPer10 = per10.toNum()?.takeIf { it >= 0 }?.toFloat() ?: prefs.ratePer10Km
+        val newCallout = callout.toNum()?.takeIf { it >= 0 }?.toFloat() ?: prefs.calloutFee
+        if (newMarkup != prefs.defaultMarkup || newHourly != prefs.hourlyRate ||
+            newPer10 != prefs.ratePer10Km || newCallout != prefs.calloutFee) {
+            // Jobs still following a default keep the old value; only new jobs get the new rates.
+            vm.freezeJobs(prefs.defaultMarkup.toDouble(), prefs.hourlyRate.toDouble(),
+                prefs.ratePer10Km.toDouble(), prefs.calloutFee.toDouble())
+        }
+        prefs.defaultMarkup = newMarkup
+        prefs.hourlyRate = newHourly
+        prefs.ratePer10Km = newPer10
+        prefs.calloutFee = newCallout
         prefs.serverUrl = url.trim().trimEnd('/')
         prefs.token = token.trim()
         val h = hour.toIntOrNull()?.coerceIn(0, 23) ?: prefs.reminderHour
@@ -1282,7 +1292,7 @@ fun SettingsScreen(vm: MainVm) {
         Spacer(Modifier.height(16.dp))
         Text("Rates (ex VAT)", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Used for the \"To invoice\" total and the job PDF. A work entry can override the hourly rate and choose whether the call-out fee is charged.",
+            "Each new job copies these rates (and the markup) when it is created and keeps them, so changing them here never changes old jobs. A job's rates can be edited on the job.",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         for ((label, value, set) in listOf(

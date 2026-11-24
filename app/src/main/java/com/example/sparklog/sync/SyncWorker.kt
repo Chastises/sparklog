@@ -162,12 +162,15 @@ private fun JSONObject.toTodo() = Todo(
 private fun Job.toJson() = JSONObject()
     .put("id", id).put("number", number).put("customerId", customerId).put("title", title)
     .put("finished", finished).put("markupPercent", markupPercent)
+    .put("hourlyRate", hourlyRate).put("ratePer10Km", ratePer10Km).put("calloutFee", calloutFee)
     .put("updatedAt", updatedAt).put("deleted", deleted)
 
 private fun JSONObject.toJob() = Job(
     id = getString("id"), number = optInt("number"), customerId = optString("customerId"),
     title = optString("title"), finished = optBoolean("finished"),
     markupPercent = optDouble("markupPercent", -1.0),
+    hourlyRate = optDouble("hourlyRate", -1.0), ratePer10Km = optDouble("ratePer10Km", -1.0),
+    calloutFee = optDouble("calloutFee", -1.0),
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )
 

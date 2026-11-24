@@ -14,6 +14,7 @@ import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
 import com.example.sparklog.sync.SyncWorker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.YearMonth
@@ -49,9 +50,35 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
     /** Saves a job. A new job (number 0) gets the next free number. */
     fun save(j: Job) {
         viewModelScope.launch {
-            val number = if (j.number > 0) j.number else maxOf(db.jobs().maxNumber() ?: 0, 1000) + 1
-            db.jobs().upsert(j.copy(number = number, updatedAt = now()))
+            val isNew = j.number <= 0
+            val number = if (!isNew) j.number else maxOf(db.jobs().maxNumber() ?: 0, 1000) + 1
+            // A new job takes the current rates and keeps them, so later changes in Settings don't touch it.
+            val fixed = if (!isNew) j else j.copy(
+                markupPercent = if (j.markupPercent >= 0) j.markupPercent else prefs.defaultMarkup.toDouble(),
+                hourlyRate = if (j.hourlyRate >= 0) j.hourlyRate else prefs.hourlyRate.toDouble(),
+                ratePer10Km = if (j.ratePer10Km >= 0) j.ratePer10Km else prefs.ratePer10Km.toDouble(),
+                calloutFee = if (j.calloutFee >= 0) j.calloutFee else prefs.calloutFee.toDouble(),
+            )
+            db.jobs().upsert(fixed.copy(number = number, updatedAt = now()))
             SyncWorker.syncSoon(app)
+        }
+    }
+    /**
+     * Called before the default rates in Settings change: jobs that still follow a default get the
+     * old value written into them, so their prices don't change. (An old default of 0 means it was
+     * never set, so those stay open and pick up the first value you enter.)
+     */
+    fun freezeJobs(markup: Double, hourly: Double, per10Km: Double, callout: Double) {
+        launchSync {
+            db.jobs().observeAll().first().forEach { j ->
+                val f = j.copy(
+                    markupPercent = if (j.markupPercent < 0 && markup > 0) markup else j.markupPercent,
+                    hourlyRate = if (j.hourlyRate < 0 && hourly > 0) hourly else j.hourlyRate,
+                    ratePer10Km = if (j.ratePer10Km < 0 && per10Km > 0) per10Km else j.ratePer10Km,
+                    calloutFee = if (j.calloutFee < 0 && callout > 0) callout else j.calloutFee,
+                )
+                if (f != j) db.jobs().upsert(f.copy(updatedAt = now()))
+            }
         }
     }
     fun delete(j: Job) = launchSync { db.jobs().upsert(j.copy(deleted = true, updatedAt = now())) }

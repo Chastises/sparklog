@@ -32,14 +32,14 @@ MAX_BODY = 5 * 1024 * 1024
 
 # table -> columns by type (every table also has id, updatedAt, deleted, server_ts)
 # columns whose "no value" default is not 0 (markupPercent -1 = use the app's default markup)
-REAL_DEFAULTS = {"markupPercent": -1.0, "hourlyRate": -1.0}
+REAL_DEFAULTS = {"markupPercent": -1.0, "hourlyRate": -1.0, "ratePer10Km": -1.0, "calloutFee": -1.0}
 
 TABLES = {
     "customers": dict(
         texts=["name", "contactPerson", "phone", "email", "address", "postalCode", "city",
                "orgNumber", "propertyId", "notes"],
         reals=[], ints=[], bools=["finished"]),
-    "jobs": dict(texts=["customerId", "title"], reals=["markupPercent"], ints=["number"], bools=["finished"]),
+    "jobs": dict(texts=["customerId", "title"], reals=["markupPercent", "hourlyRate", "ratePer10Km", "calloutFee"], ints=["number"], bools=["finished"]),
     "todos": dict(texts=["title", "notes", "jobId"], reals=[], ints=["dueAt"], bools=["done"]),
     "work_entries": dict(texts=["date", "jobId", "customerId", "description"], reals=["hours", "hourlyRate"], ints=[], bools=["callout"]),
     "trips": dict(texts=["date", "jobId", "customerId", "fromPlace", "toPlace", "purpose", "source"],

@@ -12,6 +12,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
+/** v7 -> v8: rates fixed per job. */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        for (c in listOf("hourlyRate", "ratePer10Km", "calloutFee"))
+            db.execSQL("ALTER TABLE `jobs` ADD COLUMN `$c` REAL NOT NULL DEFAULT -1")
+    }
+}
+
 /** v6 -> v7: hourly rate and call-out fee flag on work entries. */
 val MIGRATION_6_7 = object : Migration(6, 7) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -192,7 +200,7 @@ interface MaterialDao {
 
 @Database(
     entities = [Customer::class, Job::class, WorkEntry::class, Trip::class, Material::class, Todo::class],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 abstract class AppDb : RoomDatabase() {
@@ -207,7 +215,7 @@ abstract class AppDb : RoomDatabase() {
         @Volatile private var instance: AppDb? = null
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "sparklog.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .build().also { instance = it }
         }
     }

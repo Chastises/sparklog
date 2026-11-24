@@ -288,8 +288,14 @@ fun JobDialog(
     var customerId by remember { mutableStateOf(initial?.customerId ?: "") }
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var finished by remember { mutableStateOf(initial?.finished ?: false) }
-    var markup by remember { mutableStateOf(initial?.markupPercent?.takeIf { it >= 0 }?.let { fmt(it) } ?: "") }
-    val markupOk = markup.isBlank() || (markup.toNum()?.let { it >= 0 } == true)
+    // A new job starts with the current default rates filled in; they are fixed on the job when it is saved.
+    fun start(v: Double?, default: Float) = (v?.takeIf { it >= 0 } ?: if (initial == null) default.toDouble() else null)?.let { fmt(it) } ?: ""
+    var markup by remember { mutableStateOf(start(initial?.markupPercent, vm.prefs.defaultMarkup)) }
+    var hourly by remember { mutableStateOf(start(initial?.hourlyRate, vm.prefs.hourlyRate)) }
+    var per10 by remember { mutableStateOf(start(initial?.ratePer10Km, vm.prefs.ratePer10Km)) }
+    var callout by remember { mutableStateOf(start(initial?.calloutFee, vm.prefs.calloutFee)) }
+    fun ok(s: String) = s.isBlank() || (s.toNum()?.let { it >= 0 } == true)
+    val markupOk = ok(markup) && ok(hourly) && ok(per10) && ok(callout)
     FormDialog(
         title = if (initial == null) "New job" else "Job #${initial.number}",
         canSave = (customerId.isNotBlank() || title.isNotBlank()) && markupOk,
@@ -298,6 +304,9 @@ fun JobDialog(
             onSave(base.copy(
                 customerId = customerId, title = title.trim(), finished = finished,
                 markupPercent = markup.toNum()?.takeIf { it >= 0 } ?: -1.0,
+                hourlyRate = hourly.toNum()?.takeIf { it >= 0 } ?: -1.0,
+                ratePer10Km = per10.toNum()?.takeIf { it >= 0 } ?: -1.0,
+                calloutFee = callout.toNum()?.takeIf { it >= 0 } ?: -1.0,
             ))
         },
         onDelete = onDelete,
@@ -309,10 +318,15 @@ fun JobDialog(
         )
         CustomerPicker(vm, customerId) { customerId = it }
         Field("Title / what the job is", title, { title = it })
-        Field(
-            "Material markup % (blank = default ${fmt(vm.prefs.defaultMarkup.toDouble())}%)",
-            markup, { markup = it }, number = true, isError = !markupOk,
+        Text(
+            "Rates for this job (ex VAT). They stay as set here, whatever you change in Settings later.",
+            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 8.dp),
         )
+        Field("Material markup %", markup, { markup = it }, number = true, isError = !ok(markup))
+        Field("Hourly rate (kr/h)", hourly, { hourly = it }, number = true, isError = !ok(hourly))
+        Field("Driving (kr per 10 km)", per10, { per10 = it }, number = true, isError = !ok(per10))
+        Field("Call-out fee (kr per visit)", callout, { callout = it }, number = true, isError = !ok(callout))
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Finished")
@@ -338,7 +352,7 @@ fun WorkDialog(
     var description by remember { mutableStateOf(initial?.description ?: "") }
     var hours by remember { mutableStateOf(initial?.let { fmt(it.hours) } ?: "") }
     var rate by remember { mutableStateOf(initial?.hourlyRate?.takeIf { it >= 0 }?.let { fmt(it) } ?: "") }
-    var callout by remember { mutableStateOf(initial?.callout ?: (vm.prefs.calloutFee > 0f)) }
+    var callout by remember { mutableStateOf(initial?.callout ?: true) }
     val rateOk = rate.isBlank() || rate.toNum()?.let { it >= 0 } == true
     FormDialog(
         title = if (initial == null) "Work done, $date" else "Edit work, $date",
@@ -355,12 +369,12 @@ fun WorkDialog(
         JobPicker(vm, jobId) { jobId = it }
         Field("Hours", hours, { hours = it }, number = true, isError = hours.isNotBlank() && hours.toNum() == null)
         Field("What was done", description, { description = it }, singleLine = false)
-        Field("Hourly rate (blank = default ${fmt(vm.prefs.hourlyRate.toDouble())} kr)", rate, { rate = it },
+        Field("Hourly rate (blank = the job's ${fmt(jobs.find { it.id == jobId }?.hourlyRate?.takeIf { it >= 0 } ?: vm.prefs.hourlyRate.toDouble())} kr)", rate, { rate = it },
             number = true, isError = !rateOk)
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Charge call-out fee")
-                Text("${fmt(vm.prefs.calloutFee.toDouble())} kr for this visit", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Text("${fmt(jobs.find { it.id == jobId }?.calloutFee?.takeIf { it >= 0 } ?: vm.prefs.calloutFee.toDouble())} kr for this visit", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
             }
             Switch(checked = callout, onCheckedChange = { callout = it })
         }
