@@ -73,6 +73,8 @@ data class Material(
     val date: String,
     val jobId: String = "", // "" = not assigned to a job (e.g. imported invoice line needing a job)
     val customerId: String = "",
+    /** E-number (Swedish electrical product number) from invoices and price lists. */
+    val eNumber: String = "",
     val name: String,
     val quantity: Double = 1.0,
     val unit: String = "pcs",

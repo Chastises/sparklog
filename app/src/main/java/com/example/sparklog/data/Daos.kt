@@ -12,6 +12,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
+/** v5 -> v6: E-number on materials. */
+val MIGRATION_5_6 = object : Migration(5, 6) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `materials` ADD COLUMN `eNumber` TEXT NOT NULL DEFAULT ''")
+    }
+}
+
 /** v4 -> v5: per-line material markup (-1 = use the job's markup). */
 val MIGRATION_4_5 = object : Migration(4, 5) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -177,7 +184,7 @@ interface MaterialDao {
 
 @Database(
     entities = [Customer::class, Job::class, WorkEntry::class, Trip::class, Material::class, Todo::class],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class AppDb : RoomDatabase() {
@@ -192,7 +199,7 @@ abstract class AppDb : RoomDatabase() {
         @Volatile private var instance: AppDb? = null
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "sparklog.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build().also { instance = it }
         }
     }

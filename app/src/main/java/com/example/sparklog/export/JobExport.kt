@@ -57,11 +57,11 @@ object JobExport {
      */
     fun csv(context: Context, d: JobExportData): File {
         val sb = StringBuilder("﻿") // BOM so Excel reads UTF-8
-        sb.append("Job;Customer;Date;Material;Quantity;Unit;Unit price;Total\n")
+        sb.append("Job;Customer;Date;E-number;Material;Quantity;Unit;Unit price;Total\n")
         fun q(s: String) = "\"" + s.replace("\"", "\"\"") + "\""
         for (m in d.materials.sortedWith(compareBy({ it.date }, { it.name }))) {
             sb.append(listOf(
-                d.job.number.toString(), q(d.customer?.name.orEmpty()), m.date, q(m.name), num(m.quantity), m.unit,
+                d.job.number.toString(), q(d.customer?.name.orEmpty()), m.date, q(m.eNumber), q(m.name), num(m.quantity), m.unit,
                 money(d.unitPrice(m)), money(d.lineTotal(m)),
             ).joinToString(";")).append("\n")
         }
@@ -102,7 +102,7 @@ object JobExport {
             w.need(30f)
             w.row(date, "", "", money(lines.sumOf { d.lineTotal(it) }), w.boldSmall)
             for (m in lines) {
-                w.row(m.name, "${num(m.quantity)} ${m.unit}", if (m.unitPrice > 0) money(d.unitPrice(m)) else "",
+                w.row(m.name + if (m.eNumber.isNotBlank()) "  (E-nr ${m.eNumber})" else "", "${num(m.quantity)} ${m.unit}", if (m.unitPrice > 0) money(d.unitPrice(m)) else "",
                     if (m.unitPrice > 0) money(d.lineTotal(m)) else "", w.small)
             }
         }

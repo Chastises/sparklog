@@ -389,8 +389,10 @@ fun MaterialDialog(
     onDismiss: () -> Unit,
 ) {
     val jobs by vm.jobs.collectAsState(emptyList())
+    val known by vm.allMaterials.collectAsState(emptyList())
     var date by remember { mutableStateOf(initial?.date ?: defaultDate) }
     var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
+    var eNumber by remember { mutableStateOf(initial?.eNumber ?: "") }
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var qty by remember { mutableStateOf(initial?.let { fmt(it.quantity) } ?: "1") }
     var unit by remember { mutableStateOf(initial?.unit ?: "pcs") }
@@ -400,14 +402,28 @@ fun MaterialDialog(
     val markupOk = markup.isBlank() || (markup.toNum()?.let { it >= 0 } == true)
     val job = jobs.find { it.id == jobId }
     val jobPct = if (job != null && job.markupPercent >= 0) job.markupPercent else vm.prefs.defaultMarkup.toDouble()
+
+    // Typing an E-number that was used before fills in the rest from the latest line with that number.
+    androidx.compose.runtime.LaunchedEffect(eNumber) {
+        val e = eNumber.trim()
+        if (e.length >= 6 && name.isBlank()) {
+            known.filter { it.eNumber == e }.maxByOrNull { it.updatedAt }?.let { prev ->
+                name = prev.name
+                unit = prev.unit
+                if (price.isBlank() && prev.unitPrice > 0) price = fmt(prev.unitPrice)
+                if (supplier.isBlank()) supplier = prev.supplier
+            }
+        }
+    }
+
     FormDialog(
         title = if (initial == null) "Add material" else "Edit material",
-        canSave = validDate(date) && name.isNotBlank() && qty.toNum() != null && (price.isBlank() || price.toNum() != null) && markupOk,
+        canSave = eNumber.isNotBlank() && validDate(date) && name.isNotBlank() && qty.toNum() != null && (price.isBlank() || price.toNum() != null) && markupOk,
         onSave = {
             val base = initial ?: Material(date = date.trim(), name = name.trim())
             val customer = jobs.find { it.id == jobId }?.customerId ?: base.customerId
-            onSave(base.copy(date = date.trim(), jobId = jobId, customerId = customer, name = name.trim(),
-                quantity = qty.toNum() ?: 1.0, unit = unit.trim(), unitPrice = price.toNum() ?: 0.0,
+            onSave(base.copy(date = date.trim(), jobId = jobId, customerId = customer, eNumber = eNumber.trim(),
+                name = name.trim(), quantity = qty.toNum() ?: 1.0, unit = unit.trim(), unitPrice = price.toNum() ?: 0.0,
                 supplier = supplier.trim(), markupPercent = markup.toNum()?.takeIf { it >= 0 } ?: -1.0))
         },
         onDelete = onDelete,
@@ -421,6 +437,7 @@ fun MaterialDialog(
         }
         Field("Date (yyyy-MM-dd)", date, { date = it }, isError = !validDate(date))
         JobPicker(vm, jobId) { jobId = it }
+        Field("E-number", eNumber, { eNumber = it }, keyboard = KeyboardType.Number, isError = eNumber.isBlank())
         Field("Material", name, { name = it })
         Field("Quantity", qty, { qty = it }, number = true, isError = qty.isNotBlank() && qty.toNum() == null)
         Field("Unit (pcs, m, box...)", unit, { unit = it })

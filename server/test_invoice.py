@@ -33,7 +33,8 @@ INVOICE_LINES = [
     "Artikelnr   Benamning                 Antal Enhet  A-pris   Rabatt   Belopp",
     "5012345     Kabel EXQ 3G1.5 100m        2 rle    1 234,50     10%  2 221,10",
     "6000111     Fixtur Jordfelsbrytare      4 st       189,00             756,00",
-    "7000222     Dosa uttag 1-vagg          25 st        12,40             310,00",
+    "            E-nr: 1130045",
+    "DS7002      Dosa uttag 1-vagg          25 st        12,40             310,00",
     "Summa exkl moms                                                    3 287,10",
     "Moms 25%                                                             821,78",
     "Att betala                                                         4 108,88",
@@ -44,9 +45,14 @@ def test_parse_lines_text():
     items = invoice.parse_lines("\n".join(INVOICE_LINES))
     assert len(items) == 3, items
     cable, rcd, box = items
+    assert box["name"] == "Dosa uttag 1-vagg"
     assert cable["article"] == "5012345" and cable["quantity"] == 2 and cable["unit"] == "rle"
     assert abs(cable["unit_price"] - 1110.55) < 0.01  # net price after 10% discount: 2221.10 / 2
     assert rcd["quantity"] == 4 and rcd["unit_price"] == 189.0
+    # E-number: 7-digit article number, label on the line below, none found
+    assert cable["e_number"] == "5012345", cable
+    assert rcd["e_number"] == "1130045", rcd
+    assert items[2]["e_number"] == "" and items[2]["article"] == "DS7002"
     assert box["quantity"] == 25 and box["unit_price"] == 12.4
     # totals and header lines are not material lines
     assert not any("Summa" in i["name"] or "Moms" in i["name"] or "betala" in i["name"] for i in items)
@@ -104,6 +110,8 @@ def test_import_matches_job():
     assert all(r["invoiceRef"] == "8812345" and r["supplier"] == "Ahlsell" and r["date"] == "2026-11-20" for r in rows)
     cable = [r for r in rows if r["name"].startswith("Kabel")][0]
     assert cable["quantity"] == 2 and abs(cable["unitPrice"] - 1110.55) < 0.01
+    assert cable["eNumber"] == "5012345"
+    assert sorted(r["eNumber"] for r in rows) == ["", "1130045", "5012345"]
     assert len(os.listdir(os.path.join(d, "inv"))) == 1  # PDF kept
 
     # importing the same mail again changes nothing

@@ -107,13 +107,14 @@ def process_message(db, store, raw, allowed_senders=(), invoice_dir=None):
             "deleted": False,
         }
         if not items:
-            items = [{"article": "", "name": f"UNREAD INVOICE: {filename}", "quantity": 1,
+            items = [{"article": "", "e_number": "", "name": f"UNREAD INVOICE: {filename}", "quantity": 1,
                       "unit": "pcs", "unit_price": 0.0}]
         for l_idx, it in enumerate(items):
             name = it["name"] + (f" ({it['article']})" if it["article"] else "")
             rows.append(dict(
                 base,
                 id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"sparklog:{msg_id}:{a_idx}:{l_idx}")),
+                eNumber=it.get("e_number", ""),
                 name=name, quantity=it["quantity"], unit=it["unit"], unitPrice=it["unit_price"],
             ))
         log(f"'{subject}' {filename}: {len(items)} lines, job {number if job else 'not found'}")

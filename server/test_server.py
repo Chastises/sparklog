@@ -103,12 +103,13 @@ def main():
 
         # material with invoice fields round-trips
         m = {"id": "m1", "date": "2026-11-24", "jobId": "j1", "customerId": "c1", "name": "Cable 3G1.5",
-             "quantity": 100, "unit": "m", "unitPrice": 12.5, "supplier": "Ahlsell", "invoiceRef": "INV-9",
+             "eNumber": "1234567", "quantity": 100, "unit": "m", "unitPrice": 12.5, "supplier": "Ahlsell", "invoiceRef": "INV-9",
              "source": "invoice", "updatedAt": 7000, "deleted": False}
         post({"since": 0, "materials": [m]})
         got = post({"since": 0})["materials"][0]
         assert got["unitPrice"] == 12.5 and got["source"] == "invoice" and got["jobId"] == "j1"
         assert got["markupPercent"] == -1.0  # no per-line markup unless set
+        assert got["eNumber"] == "1234567"
         post({"since": 0, "materials": [dict(m, markupPercent=20.0, updatedAt=7100)]})
         assert post({"since": 0})["materials"][0]["markupPercent"] == 20.0
 

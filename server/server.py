@@ -37,7 +37,7 @@ TABLES = {
     "work_entries": dict(texts=["date", "jobId", "customerId", "description"], reals=["hours"], ints=[], bools=[]),
     "trips": dict(texts=["date", "jobId", "customerId", "fromPlace", "toPlace", "purpose", "source"],
                   reals=["km"], ints=[], bools=[]),
-    "materials": dict(texts=["date", "jobId", "customerId", "name", "unit", "supplier", "invoiceRef", "source"],
+    "materials": dict(texts=["date", "jobId", "customerId", "eNumber", "name", "unit", "supplier", "invoiceRef", "source"],
                       reals=["quantity", "unitPrice", "markupPercent"], ints=[], bools=[]),
 }
 
