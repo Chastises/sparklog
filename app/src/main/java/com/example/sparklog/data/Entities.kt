@@ -48,6 +48,10 @@ data class WorkEntry(
     val customerId: String = "", // copied from the job when saved
     val description: String = "",
     val hours: Double = 0.0,
+    /** Hourly rate ex VAT for this entry; -1 = use the default rate from Settings. */
+    val hourlyRate: Double = -1.0,
+    /** Whether the call-out fee is charged for this visit. */
+    val callout: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis(),
     val deleted: Boolean = false,
 )

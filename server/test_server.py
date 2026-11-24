@@ -113,6 +113,16 @@ def main():
         post({"since": 0, "materials": [dict(m, markupPercent=20.0, updatedAt=7100)]})
         assert post({"since": 0})["materials"][0]["markupPercent"] == 20.0
 
+        # work entries: hourly rate (default -1) and call-out flag round-trip
+        w = {"id": "w9", "date": "2026-11-24", "jobId": "j1", "customerId": "c1", "description": "x", "hours": 2,
+             "updatedAt": 7500, "deleted": False}
+        post({"since": 0, "work_entries": [w]})
+        got = [r for r in post({"since": 0})["work_entries"] if r["id"] == "w9"][0]
+        assert got["hourlyRate"] == -1.0 and got["callout"] is False, got
+        post({"since": 0, "work_entries": [dict(w, hourlyRate=650.0, callout=True, updatedAt=7600)]})
+        got = [r for r in post({"since": 0})["work_entries"] if r["id"] == "w9"][0]
+        assert got["hourlyRate"] == 650.0 and got["callout"] is True, got
+
         # todos: epoch-millis due time and done flag round-trip, completion syncs
         due = 1795600000000
         todo = {"id": "td1", "title": "Order cable", "notes": "3G1.5", "jobId": "j1", "dueAt": due,

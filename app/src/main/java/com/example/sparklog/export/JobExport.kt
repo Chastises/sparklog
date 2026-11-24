@@ -23,7 +23,17 @@ data class JobExportData(
     val materials: List<Material>,
     /** Effective material markup in percent. Used to compute customer prices; never printed. */
     val markupPercent: Double = 0.0,
+    /** Default rates from Settings (ex VAT). Used for the billing summary. */
+    val hourlyRate: Double = 0.0,
+    val ratePer10Km: Double = 0.0,
+    val calloutFee: Double = 0.0,
 ) {
+    val labour get() = Billing.labour(work, hourlyRate)
+    val driving get() = Billing.driving(trips, ratePer10Km)
+    val callouts get() = Billing.callouts(work, calloutFee)
+    val materialsTotal get() = materials.sumOf { lineTotal(it) }
+    /** Everything charged to the customer, ex VAT. */
+    val totalExVat get() = Math.round((labour + driving + callouts + materialsTotal) * 100.0) / 100.0
     /** Price per unit as the customer sees it. */
     fun unitPrice(m: Material) = Markup.unitPrice(m, markupPercent)
     /** Line total as the customer sees it. */
@@ -44,6 +54,15 @@ object Markup {
     const val VAT_PERCENT = 25.0
     fun withVat(exVat: Double) = round2(exVat * (1.0 + VAT_PERCENT / 100.0))
     fun profit(m: Material, jobPct: Double) = round2(lineTotal(m, jobPct) - cost(m))
+}
+
+/** Labour, driving and call-out maths shared by the job overview and the PDF. */
+object Billing {
+    private fun round2(d: Double) = Math.round(d * 100.0) / 100.0
+    fun rate(e: WorkEntry, defaultRate: Double) = if (e.hourlyRate >= 0) e.hourlyRate else defaultRate
+    fun labour(work: List<WorkEntry>, defaultRate: Double) = round2(work.sumOf { it.hours * rate(it, defaultRate) })
+    fun driving(trips: List<Trip>, per10Km: Double) = round2(trips.sumOf { it.km } * per10Km / 10.0)
+    fun callouts(work: List<WorkEntry>, fee: Double) = round2(work.count { it.callout } * fee)
 }
 
 object JobExport {
@@ -137,6 +156,25 @@ object JobExport {
                 w.row("${t.date}  $route".trim(), "", "", num(t.km) + " km", w.small)
             }
             w.row("Total driven", "", "", num(d.trips.sumOf { it.km }) + " km", w.boldSmall)
+        }
+
+        // ---- what to pay (customer-facing: rates and totals, no markup)
+        val lines = buildList {
+            if (d.labour > 0) add(Triple("Work", "${num(d.work.sumOf { it.hours })} h", d.labour))
+            if (d.driving > 0) add(Triple("Driving", "${num(d.trips.sumOf { it.km })} km", d.driving))
+            if (d.callouts > 0) add(Triple("Call-out fee", "${d.work.count { it.callout }} x ${money(d.calloutFee)}", d.callouts))
+            if (d.materialsTotal > 0) add(Triple("Materials", "", d.materialsTotal))
+        }
+        if (lines.isNotEmpty()) {
+            w.gap(18f)
+            w.text("Summary", w.h2)
+            w.gap(4f)
+            for ((label, qty, amount) in lines) w.row(label, qty, "", money(amount), w.small)
+            val total = d.totalExVat
+            w.gap(4f)
+            w.row("Total ex VAT", "", "", money(total), w.boldSmall)
+            w.row("VAT ${num(Markup.VAT_PERCENT)}%", "", "", money(Markup.withVat(total) - total), w.small)
+            w.row("Total incl. VAT", "", "", money(Markup.withVat(total)), w.boldSmall)
         }
 
         val f = File(exportDir(context), "Job-${d.job.number}.pdf")

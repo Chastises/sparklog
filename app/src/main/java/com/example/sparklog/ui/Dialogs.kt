@@ -337,13 +337,17 @@ fun WorkDialog(
     var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
     var description by remember { mutableStateOf(initial?.description ?: "") }
     var hours by remember { mutableStateOf(initial?.let { fmt(it.hours) } ?: "") }
+    var rate by remember { mutableStateOf(initial?.hourlyRate?.takeIf { it >= 0 }?.let { fmt(it) } ?: "") }
+    var callout by remember { mutableStateOf(initial?.callout ?: (vm.prefs.calloutFee > 0f)) }
+    val rateOk = rate.isBlank() || rate.toNum()?.let { it >= 0 } == true
     FormDialog(
         title = if (initial == null) "Work done, $date" else "Edit work, $date",
-        canSave = hours.toNum() != null,
+        canSave = hours.toNum() != null && rateOk,
         onSave = {
             val base = initial ?: WorkEntry(date = date)
             val customer = jobs.find { it.id == jobId }?.customerId ?: base.customerId
-            onSave(base.copy(jobId = jobId, customerId = customer, description = description.trim(), hours = hours.toNum() ?: 0.0))
+            onSave(base.copy(jobId = jobId, customerId = customer, description = description.trim(), hours = hours.toNum() ?: 0.0,
+                hourlyRate = rate.toNum()?.takeIf { it >= 0 } ?: -1.0, callout = callout))
         },
         onDelete = onDelete,
         onDismiss = onDismiss,
@@ -351,6 +355,15 @@ fun WorkDialog(
         JobPicker(vm, jobId) { jobId = it }
         Field("Hours", hours, { hours = it }, number = true, isError = hours.isNotBlank() && hours.toNum() == null)
         Field("What was done", description, { description = it }, singleLine = false)
+        Field("Hourly rate (blank = default ${fmt(vm.prefs.hourlyRate.toDouble())} kr)", rate, { rate = it },
+            number = true, isError = !rateOk)
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Charge call-out fee")
+                Text("${fmt(vm.prefs.calloutFee.toDouble())} kr for this visit", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            }
+            Switch(checked = callout, onCheckedChange = { callout = it })
+        }
     }
 }
 

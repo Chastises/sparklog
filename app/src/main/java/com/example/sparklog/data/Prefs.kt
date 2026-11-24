@@ -37,6 +37,21 @@ class Prefs(context: Context) {
         get() = sp.getFloat("defaultMarkup", 30f)
         set(v) = sp.edit().putFloat("defaultMarkup", v).apply()
 
+    /** Default hourly rate for work, kr per hour ex VAT. */
+    var hourlyRate: Float
+        get() = sp.getFloat("hourlyRate", 0f)
+        set(v) = sp.edit().putFloat("hourlyRate", v).apply()
+
+    /** Driving charge, kr per 10 km ex VAT. */
+    var ratePer10Km: Float
+        get() = sp.getFloat("ratePer10Km", 0f)
+        set(v) = sp.edit().putFloat("ratePer10Km", v).apply()
+
+    /** Call-out fee per visit, kr ex VAT (charged per visit when ticked on the work entry). */
+    var calloutFee: Float
+        get() = sp.getFloat("calloutFee", 0f)
+        set(v) = sp.edit().putFloat("calloutFee", v).apply()
+
     /** Free-text note shown on the home screen (stored on this phone only). */
     var homeNote: String
         get() = sp.getString("homeNote", "") ?: ""

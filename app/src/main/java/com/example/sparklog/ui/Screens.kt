@@ -974,12 +974,14 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                         DropdownMenu(expanded = shareMenu, onDismissRequest = { shareMenu = false }) {
                             DropdownMenuItem(text = { Text("Share job summary (PDF)") }, onClick = {
                                 shareMenu = false
-                                val data = JobExportData(job, customer, work, trips, materials, markupPct)
+                                val data = JobExportData(job, customer, work, trips, materials, markupPct,
+                                    vm.prefs.hourlyRate.toDouble(), vm.prefs.ratePer10Km.toDouble(), vm.prefs.calloutFee.toDouble())
                                 JobExport.share(context, JobExport.pdf(context, data), "application/pdf", "Job #${job.number}")
                             })
                             DropdownMenuItem(text = { Text("Share materials (CSV)") }, onClick = {
                                 shareMenu = false
-                                val data = JobExportData(job, customer, work, trips, materials, markupPct)
+                                val data = JobExportData(job, customer, work, trips, materials, markupPct,
+                                    vm.prefs.hourlyRate.toDouble(), vm.prefs.ratePer10Km.toDouble(), vm.prefs.calloutFee.toDouble())
                                 JobExport.share(context, JobExport.csv(context, data), "text/csv", "Job #${job.number} materials")
                             })
                         }
@@ -1033,6 +1035,37 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                     Stat("Hours", fmt(work.sumOf { it.hours }))
                     Stat("Driven", fmt(trips.sumOf { it.km }) + " km")
                     Stat("Materials", money(cost) + " kr")
+                }
+            }
+            run {
+                val d = JobExportData(job, customer, work, trips, materials, markupPct,
+                    vm.prefs.hourlyRate.toDouble(), vm.prefs.ratePer10Km.toDouble(), vm.prefs.calloutFee.toDouble())
+                if (d.totalExVat > 0) {
+                    Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("To invoice", style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(8.dp))
+                            @Composable
+                            fun line(label: String, amount: Double, bold: Boolean = false) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text(label, fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else null)
+                                    Text("${money(amount)} kr", fontWeight = if (bold) androidx.compose.ui.text.font.FontWeight.Bold else null)
+                                }
+                            }
+                            if (d.labour > 0) line("Work (${fmt(work.sumOf { it.hours })} h)", d.labour)
+                            if (d.driving > 0) line("Driving (${fmt(trips.sumOf { it.km })} km)", d.driving)
+                            if (d.callouts > 0) line("Call-out fee (${work.count { it.callout }})", d.callouts)
+                            if (d.materialsTotal > 0) line("Materials", d.materialsTotal)
+                            Spacer(Modifier.height(4.dp))
+                            line("Total ex VAT", d.totalExVat, bold = true)
+                            line("Total incl. 25% VAT", Markup.withVat(d.totalExVat), bold = true)
+                            if (vm.prefs.hourlyRate <= 0f && work.isNotEmpty()) {
+                                Text("Set your hourly rate in Settings to include work.", style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                            }
+                        }
+                    }
                 }
             }
             if (materials.isNotEmpty()) {
@@ -1205,10 +1238,16 @@ fun SettingsScreen(vm: MainVm) {
     var hour by remember { mutableStateOf(prefs.reminderHour.toString()) }
     var minute by remember { mutableStateOf(prefs.reminderMinute.toString().padStart(2, '0')) }
     var markup by remember { mutableStateOf(fmt(prefs.defaultMarkup.toDouble())) }
+    var hourly by remember { mutableStateOf(fmt(prefs.hourlyRate.toDouble())) }
+    var per10 by remember { mutableStateOf(fmt(prefs.ratePer10Km.toDouble())) }
+    var callout by remember { mutableStateOf(fmt(prefs.calloutFee.toDouble())) }
     var status by remember { mutableStateOf("") }
 
     fun saveAll() {
         markup.toNum()?.takeIf { it >= 0 }?.let { prefs.defaultMarkup = it.toFloat() }
+        hourly.toNum()?.takeIf { it >= 0 }?.let { prefs.hourlyRate = it.toFloat() }
+        per10.toNum()?.takeIf { it >= 0 }?.let { prefs.ratePer10Km = it.toFloat() }
+        callout.toNum()?.takeIf { it >= 0 }?.let { prefs.calloutFee = it.toFloat() }
         prefs.serverUrl = url.trim().trimEnd('/')
         prefs.token = token.trim()
         val h = hour.toIntOrNull()?.coerceIn(0, 23) ?: prefs.reminderHour
@@ -1239,6 +1278,24 @@ fun SettingsScreen(vm: MainVm) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
         )
+
+        Spacer(Modifier.height(16.dp))
+        Text("Rates (ex VAT)", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Used for the \"To invoice\" total and the job PDF. A work entry can override the hourly rate and choose whether the call-out fee is charged.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        for ((label, value, set) in listOf(
+            Triple("Hourly rate (kr/h)", hourly, { v: String -> hourly = v }),
+            Triple("Driving (kr per 10 km)", per10, { v: String -> per10 = v }),
+            Triple("Call-out fee (kr per visit)", callout, { v: String -> callout = v }),
+        )) {
+            OutlinedTextField(
+                value, set, label = { Text(label) }, singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
         Text("Server sync", style = MaterialTheme.typography.titleMedium)

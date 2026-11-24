@@ -173,12 +173,14 @@ private fun JSONObject.toJob() = Job(
 
 private fun WorkEntry.toJson() = JSONObject()
     .put("id", id).put("date", date).put("jobId", jobId).put("customerId", customerId).put("description", description)
-    .put("hours", hours).put("updatedAt", updatedAt).put("deleted", deleted)
+    .put("hours", hours).put("hourlyRate", hourlyRate).put("callout", callout)
+    .put("updatedAt", updatedAt).put("deleted", deleted)
 
 private fun JSONObject.toWorkEntry() = WorkEntry(
     id = getString("id"), date = getString("date"), jobId = optString("jobId"),
     customerId = optString("customerId"),
     description = optString("description"), hours = optDouble("hours"),
+    hourlyRate = optDouble("hourlyRate", -1.0), callout = optBoolean("callout"),
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )
 
