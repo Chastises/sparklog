@@ -7,9 +7,9 @@ Env:  SPARKLOG_TOKEN (required), SPARKLOG_DB (default sparklog.db),
       Email invoice import is switched on by SPARKLOG_IMAP_HOST (see mailimport.py).
 
 POST /sync  (Authorization: Bearer <token>)
-  body:     {"since": <server ts>, "customers": [...], "jobs": [...], "work_entries": [...],
-             "trips": [...], "materials": [...]}
-  response: {"serverTime": <ts>, same five lists}
+  body:     {"since": <server ts>, "customers": [...], "jobs": [...], "todos": [...],
+             "work_entries": [...], "trips": [...], "materials": [...]}
+  response: {"serverTime": <ts>, same six lists}
 Rows from the client are accepted only if their updatedAt is newer than the stored row
 (last write wins). The response holds every row whose server timestamp is greater than `since`.
 """
@@ -30,6 +30,7 @@ TABLES = {
                "orgNumber", "propertyId", "notes"],
         reals=[], ints=[], bools=["finished"]),
     "jobs": dict(texts=["customerId", "title"], reals=[], ints=["number"], bools=["finished"]),
+    "todos": dict(texts=["title", "notes", "jobId"], reals=[], ints=["dueAt"], bools=["done"]),
     "work_entries": dict(texts=["date", "jobId", "customerId", "description"], reals=["hours"], ints=[], bools=[]),
     "trips": dict(texts=["date", "jobId", "customerId", "fromPlace", "toPlace", "purpose", "source"],
                   reals=["km"], ints=[], bools=[]),

@@ -32,6 +32,11 @@ class Prefs(context: Context) {
         get() = sp.getInt("reminderMinute", 0)
         set(v) = sp.edit().putInt("reminderMinute", v).apply()
 
+    /** Free-text note shown on the home screen (stored on this phone only). */
+    var homeNote: String
+        get() = sp.getString("homeNote", "") ?: ""
+        set(v) = sp.edit().putString("homeNote", v).apply()
+
     var activeTripId: String?
         get() = sp.getString("activeTripId", null)
         set(v) = sp.edit().putString("activeTripId", v).apply()

@@ -32,13 +32,20 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
+import com.example.sparklog.data.Todo
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -88,10 +95,12 @@ import java.util.Locale
 
 // ---------------------------------------------------------------- root
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SparkLogRoot(initialDay: LocalDate?, vm: MainVm = viewModel()) {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewModel()) {
+    var tab by rememberSaveable { mutableIntStateOf(if (initialTab == "todo") 3 else 0) }
     var day by rememberSaveable { mutableStateOf(initialDay?.toString()) }
+    var sub by rememberSaveable { mutableStateOf<String?>(null) } // "materials" or "settings"
 
     val selected = day
     if (selected != null) {
@@ -99,16 +108,33 @@ fun SparkLogRoot(initialDay: LocalDate?, vm: MainVm = viewModel()) {
         DayScreen(vm, LocalDate.parse(selected), onBack = { day = null })
         return
     }
+    val subScreen = sub
+    if (subScreen != null) {
+        BackHandler { sub = null }
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text(if (subScreen == "materials") "Materials" else "Settings") },
+                    navigationIcon = { IconButton(onClick = { sub = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                )
+            },
+        ) { padding ->
+            Box(Modifier.padding(padding).fillMaxSize()) {
+                if (subScreen == "materials") MaterialsScreen(vm) else SettingsScreen(vm)
+            }
+        }
+        return
+    }
 
     Scaffold(
         bottomBar = {
             NavigationBar {
                 val items = listOf(
+                    "Home" to Icons.Default.Home,
                     "Calendar" to Icons.Default.CalendarMonth,
                     "Drive" to Icons.Default.DirectionsCar,
-                    "Materials" to Icons.Default.Build,
+                    "To-do" to Icons.Default.Checklist,
                     "Jobs" to Icons.Default.Work,
-                    "Settings" to Icons.Default.Settings,
                 )
                 items.forEachIndexed { i, (label, icon) ->
                     NavigationBarItem(
@@ -123,14 +149,205 @@ fun SparkLogRoot(initialDay: LocalDate?, vm: MainVm = viewModel()) {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (tab) {
-                0 -> CalendarScreen(vm, onOpenDay = { day = it.toString() })
-                1 -> DriveScreen(vm)
-                2 -> MaterialsScreen(vm)
-                3 -> JobsScreen(vm)
-                else -> SettingsScreen(vm)
+                0 -> HomeScreen(vm, onOpenDay = { day = it.toString() }, onGoTab = { tab = it }, onOpenSub = { sub = it })
+                1 -> CalendarScreen(vm, onOpenDay = { day = it.toString() })
+                2 -> DriveScreen(vm)
+                3 -> TodoScreen(vm)
+                else -> JobsScreen(vm)
             }
         }
     }
+}
+
+// ---------------------------------------------------------------- home
+
+@Composable
+fun HomeScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit, onGoTab: (Int) -> Unit, onOpenSub: (String) -> Unit) {
+    val today = LocalDate.now()
+    val ds = today.toString()
+    val ym = YearMonth.from(today)
+    val work by remember(ds) { vm.workDay(ds) }.collectAsState(emptyList())
+    val trips by remember(ds) { vm.tripsDay(ds) }.collectAsState(emptyList())
+    val materials by remember(ds) { vm.materialsDay(ds) }.collectAsState(emptyList())
+    val monthWork by remember(ds) { vm.workMonth(ym) }.collectAsState(emptyList())
+    val todos by vm.todos.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState(emptyList())
+    val allMaterials by vm.allMaterials.collectAsState(emptyList())
+    val names = rememberNames(vm)
+
+    var note by remember { mutableStateOf(vm.prefs.homeNote) }
+    var editNote by remember { mutableStateOf(false) }
+
+    val weekday = today.dayOfWeek != DayOfWeek.SATURDAY && today.dayOfWeek != DayOfWeek.SUNDAY
+    val now = System.currentTimeMillis()
+    val open = todos.filter { !it.done }
+    val overdue = open.filter { it.dueAt in 1 until now }
+    val upcoming = open.sortedWith(compareBy({ if (it.dueAt > 0) 0 else 1 }, { it.dueAt })).take(3)
+    val needJob = allMaterials.count { it.source == "invoice" && it.jobId.isBlank() }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    today.format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ENGLISH)),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Text("SparkLog", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = { onOpenSub("settings") }) { Icon(Icons.Default.Settings, "Settings") }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("Today", style = MaterialTheme.typography.titleMedium)
+                Text("${fmt(work.sumOf { it.hours })} h worked")
+                Text("${fmt(trips.sumOf { it.km })} km driven, ${materials.size} material lines")
+                if (weekday && work.isEmpty()) {
+                    Text("Today's work is not logged yet.", color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp))
+                }
+                Button(onClick = { onOpenDay(today) }, modifier = Modifier.padding(top = 8.dp)) {
+                    Text(if (work.isEmpty()) "Log today's work" else "Open today")
+                }
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("To-do", style = MaterialTheme.typography.titleMedium)
+                if (open.isEmpty()) {
+                    Text("Nothing to do.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text(
+                        "${open.size} open" + if (overdue.isNotEmpty()) ", ${overdue.size} overdue" else "",
+                        color = if (overdue.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    )
+                    upcoming.forEach { t ->
+                        val due = dueToDateTime(t.dueAt)?.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM HH:mm", Locale.ENGLISH))
+                        Text("• ${t.title}" + (due?.let { " ($it)" } ?: ""), modifier = Modifier.padding(top = 2.dp))
+                    }
+                }
+                OutlinedButton(onClick = { onGoTab(3) }, modifier = Modifier.padding(top = 8.dp)) { Text("Open to-do list") }
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Text("This month", style = MaterialTheme.typography.titleMedium)
+                Text("${fmt(monthWork.sumOf { it.hours })} h worked")
+                Text("${jobs.count { !it.finished }} ongoing jobs")
+                if (needJob > 0) {
+                    Text("$needJob imported invoice lines need a job", color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 4.dp))
+                    OutlinedButton(onClick = { onOpenSub("materials") }, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Open materials")
+                    }
+                }
+            }
+        }
+
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Notes", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { editNote = true }) { Text("Edit") }
+                }
+                Text(
+                    note.ifBlank { "Pin anything here: gate codes, supplier numbers, reminders to yourself." },
+                    color = if (note.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                )
+                Text("Saved on this phone only.", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { onGoTab(2) }, modifier = Modifier.weight(1f)) { Text("Drive") }
+            OutlinedButton(onClick = { onOpenSub("materials") }, modifier = Modifier.weight(1f)) { Text("Materials") }
+            OutlinedButton(onClick = { onGoTab(4) }, modifier = Modifier.weight(1f)) { Text("Jobs") }
+        }
+    }
+
+    if (editNote) {
+        var draft by remember { mutableStateOf(note) }
+        AlertDialog(
+            onDismissRequest = { editNote = false },
+            title = { Text("Notes") },
+            text = {
+                OutlinedTextField(draft, { draft = it }, modifier = Modifier.fillMaxWidth().height(180.dp))
+            },
+            confirmButton = {
+                TextButton(onClick = { note = draft; vm.prefs.homeNote = draft; editNote = false }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { editNote = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+// ---------------------------------------------------------------- to-do
+
+@Composable
+fun TodoScreen(vm: MainVm) {
+    val todos by vm.todos.collectAsState(emptyList())
+    val names = rememberNames(vm)
+    var showDone by rememberSaveable { mutableStateOf(false) }
+    var dialog by remember { mutableStateOf<Any?>(null) }
+    val now = System.currentTimeMillis()
+
+    val open = todos.filter { !it.done }
+        .sortedWith(compareBy({ if (it.dueAt > 0) 0 else 1 }, { it.dueAt }, { it.title.lowercase() }))
+    val done = todos.filter { it.done }.sortedByDescending { it.updatedAt }
+
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+            if (open.isEmpty()) {
+                item { Text("Nothing to do. Tap + to add a to-do.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            }
+            items(open, key = { it.id }) { t -> TodoRow(t, names, now, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
+            if (done.isNotEmpty()) {
+                item {
+                    TextButton(onClick = { showDone = !showDone }, modifier = Modifier.padding(start = 8.dp)) {
+                        Text(if (showDone) "Hide done (${done.size})" else "Show done (${done.size})")
+                    }
+                }
+                if (showDone) items(done, key = { it.id }) { t -> TodoRow(t, names, now, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
+            }
+        }
+        FloatingActionButton(
+            onClick = { dialog = "new" },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        ) { Icon(Icons.Default.Add, "Add to-do") }
+    }
+
+    when (val d = dialog) {
+        "new" -> TodoDialog(vm, null, { vm.save(it); dialog = null }, null) { dialog = null }
+        is Todo -> TodoDialog(vm, d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
+        else -> Unit
+    }
+}
+
+@Composable
+private fun TodoRow(t: Todo, names: Map<String, String>, now: Long, onToggle: () -> Unit, onClick: () -> Unit) {
+    val due = dueToDateTime(t.dueAt)?.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM HH:mm", Locale.ENGLISH))
+    val overdue = !t.done && t.dueAt in 1 until now
+    val job = if (t.jobId.isNotBlank()) customerLabel(names, t.jobId, "") else ""
+    ListItem(
+        leadingContent = { Checkbox(checked = t.done, onCheckedChange = { onToggle() }) },
+        headlineContent = {
+            Text(t.title, textDecoration = if (t.done) TextDecoration.LineThrough else null)
+        },
+        supportingContent = {
+            Column {
+                if (due != null) {
+                    Text(due, color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (job.isNotBlank()) Text(job)
+                if (t.notes.isNotBlank()) Text(t.notes)
+            }
+        },
+        modifier = Modifier.clickable(onClick = onClick),
+    )
+    HorizontalDivider()
 }
 
 // ---------------------------------------------------------------- calendar

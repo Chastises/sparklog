@@ -12,6 +12,17 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
+/** v2 -> v3: to-do list. */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `todos` (`id` TEXT NOT NULL, `title` TEXT NOT NULL, `notes` TEXT NOT NULL, " +
+                "`jobId` TEXT NOT NULL, `dueAt` INTEGER NOT NULL, `done` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+        )
+    }
+}
+
 /** v1 -> v2: jobs table, jobId on entries, invoice fields on materials. Keeps all existing data. */
 val MIGRATION_1_2 = object : Migration(1, 2) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -28,6 +39,21 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("ALTER TABLE `materials` ADD COLUMN `invoiceRef` TEXT NOT NULL DEFAULT ''")
         db.execSQL("ALTER TABLE `materials` ADD COLUMN `source` TEXT NOT NULL DEFAULT 'manual'")
     }
+}
+
+@Dao
+interface TodoDao {
+    @Query("SELECT * FROM todos WHERE deleted = 0")
+    fun observeAll(): Flow<List<Todo>>
+
+    @Query("SELECT * FROM todos WHERE updatedAt > :since")
+    suspend fun changedSince(since: Long): List<Todo>
+
+    @Query("SELECT * FROM todos WHERE id = :id")
+    suspend fun get(id: String): Todo?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: Todo)
 }
 
 @Dao
@@ -133,11 +159,12 @@ interface MaterialDao {
 }
 
 @Database(
-    entities = [Customer::class, Job::class, WorkEntry::class, Trip::class, Material::class],
-    version = 2,
+    entities = [Customer::class, Job::class, WorkEntry::class, Trip::class, Material::class, Todo::class],
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDb : RoomDatabase() {
+    abstract fun todos(): TodoDao
     abstract fun jobs(): JobDao
     abstract fun customers(): CustomerDao
     abstract fun work(): WorkDao
@@ -148,7 +175,7 @@ abstract class AppDb : RoomDatabase() {
         @Volatile private var instance: AppDb? = null
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "sparklog.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build().also { instance = it }
         }
     }

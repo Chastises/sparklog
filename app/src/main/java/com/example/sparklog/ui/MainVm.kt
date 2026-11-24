@@ -8,6 +8,8 @@ import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
 import com.example.sparklog.data.Material
 import com.example.sparklog.data.Prefs
+import com.example.sparklog.data.Todo
+import com.example.sparklog.todo.TodoScheduler
 import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
 import com.example.sparklog.sync.SyncWorker
@@ -28,6 +30,18 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
 
     val customers = db.customers().observeAll()
     val jobs = db.jobs().observeAll()
+    val todos = db.todos().observeAll()
+
+    fun save(t: Todo) {
+        val updated = t.copy(updatedAt = now())
+        TodoScheduler.sync(app, updated)
+        launchSync { db.todos().upsert(updated) }
+    }
+    fun delete(t: Todo) {
+        val updated = t.copy(deleted = true, updatedAt = now())
+        TodoScheduler.sync(app, updated)
+        launchSync { db.todos().upsert(updated) }
+    }
     val allMaterials = db.materials().observeAll()
 
     /** Saves a job. A new job (number 0) gets the next free number. */

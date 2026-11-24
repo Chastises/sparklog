@@ -30,9 +30,22 @@ import androidx.compose.ui.unit.dp
 import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
 import com.example.sparklog.data.Material
+import com.example.sparklog.data.Todo
 import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 internal fun String.toNum(): Double? = trim().replace(',', '.').toDoubleOrNull()
 internal fun fmt(d: Double): String = if (d % 1.0 == 0.0) d.toInt().toString() else "%.1f".format(d)
@@ -203,7 +216,7 @@ internal fun jobLabel(j: Job, customerNames: Map<String, String>): String {
 /** Dropdown of jobs. Finished jobs are hidden unless already selected. "+ New job" creates one. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun JobPicker(vm: MainVm, selectedId: String, onSelect: (String) -> Unit) {
+internal fun JobPicker(vm: MainVm, selectedId: String, onSelect: (String) -> Unit) {
     val jobs by vm.jobs.collectAsState(emptyList())
     val customers by vm.customers.collectAsState(emptyList())
     val names = customers.associate { it.id to it.name }
@@ -397,5 +410,107 @@ fun MaterialDialog(
         Field("Unit (pcs, m, box...)", unit, { unit = it })
         Field("Price per unit (ex VAT)", price, { price = it }, number = true, isError = price.isNotBlank() && price.toNum() == null)
         Field("Supplier", supplier, { supplier = it })
+    }
+}
+
+private val dueFormat = DateTimeFormatter.ofPattern("EEE d MMM yyyy")
+private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
+
+internal fun dueToDateTime(ms: Long): LocalDateTime? =
+    if (ms <= 0L) null else LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault())
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TodoDialog(
+    vm: MainVm,
+    initial: Todo?,
+    onSave: (Todo) -> Unit,
+    onDelete: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
+    var title by remember { mutableStateOf(initial?.title ?: "") }
+    var notes by remember { mutableStateOf(initial?.notes ?: "") }
+    var jobId by remember { mutableStateOf(initial?.jobId ?: "") }
+    var due by remember { mutableStateOf(dueToDateTime(initial?.dueAt ?: 0L)) }
+    var pickDate by remember { mutableStateOf(false) }
+    var pickTime by remember { mutableStateOf(false) }
+
+    fun preset(dt: LocalDateTime) { due = dt }
+    val now = LocalDateTime.now()
+
+    FormDialog(
+        title = if (initial == null) "New to-do" else "Edit to-do",
+        canSave = title.isNotBlank(),
+        onSave = {
+            val base = initial ?: Todo(title = title.trim())
+            val dueMs = due?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli() ?: 0L
+            onSave(base.copy(title = title.trim(), notes = notes.trim(), jobId = jobId, dueAt = dueMs))
+        },
+        onDelete = onDelete,
+        onDismiss = onDismiss,
+    ) {
+        Field("What needs doing", title, { title = it })
+        Field("Notes", notes, { notes = it }, singleLine = false)
+        JobPicker(vm, jobId) { jobId = it }
+
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Remind me")
+                Text(
+                    due?.let { it.format(dueFormat) + " " + it.format(timeFormat) } ?: "No reminder",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
+            }
+            Switch(
+                checked = due != null,
+                onCheckedChange = { on -> due = if (on) now.plusHours(1).withMinute(0).withSecond(0).withNano(0) else null },
+            )
+        }
+        if (due != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                OutlinedButton(onClick = { pickDate = true }) { Text("Date") }
+                OutlinedButton(onClick = { pickTime = true }) { Text("Time") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                TextButton(onClick = { preset(now.plusHours(1).withSecond(0).withNano(0)) }) { Text("In 1 h") }
+                TextButton(onClick = { preset(LocalDate.now().atTime(17, 0)) }) { Text("Today 17:00") }
+                TextButton(onClick = { preset(LocalDate.now().plusDays(1).atTime(7, 0)) }) { Text("Tomorrow 07:00") }
+            }
+        }
+    }
+
+    val current = due
+    if (pickDate && current != null) {
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = current.toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { pickDate = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { ms ->
+                        val d = Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate()
+                        due = LocalDateTime.of(d, current.toLocalTime())
+                    }
+                    pickDate = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { pickDate = false }) { Text("Cancel") } },
+        ) { DatePicker(state = state) }
+    }
+    if (pickTime && current != null) {
+        val state = rememberTimePickerState(initialHour = current.hour, initialMinute = current.minute, is24Hour = true)
+        AlertDialog(
+            onDismissRequest = { pickTime = false },
+            title = { Text("Reminder time") },
+            text = { TimePicker(state = state) },
+            confirmButton = {
+                TextButton(onClick = {
+                    due = LocalDateTime.of(current.toLocalDate(), LocalTime.of(state.hour, state.minute))
+                    pickTime = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { pickTime = false }) { Text("Cancel") } },
+        )
     }
 }

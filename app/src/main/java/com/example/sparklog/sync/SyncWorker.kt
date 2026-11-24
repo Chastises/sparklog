@@ -15,7 +15,9 @@ import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
 import com.example.sparklog.data.Material
 import com.example.sparklog.data.Prefs
+import com.example.sparklog.data.Todo
 import com.example.sparklog.data.Trip
+import com.example.sparklog.todo.TodoScheduler
 import com.example.sparklog.data.WorkEntry
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -72,6 +74,7 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
                 put("since", prefs.lastPull)
                 put("customers", JSONArray(db.customers().changedSince(since).map { it.toJson() }))
                 put("jobs", JSONArray(db.jobs().changedSince(since).map { it.toJson() }))
+                put("todos", JSONArray(db.todos().changedSince(since).map { it.toJson() }))
                 put("work_entries", JSONArray(db.work().changedSince(since).map { it.toJson() }))
                 put("trips", JSONArray(db.trips().changedSince(since).map { it.toJson() }))
                 put("materials", JSONArray(db.materials().changedSince(since).map { it.toJson() }))
@@ -97,6 +100,14 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
                 val remote = o.toJob()
                 val local = db.jobs().get(remote.id)
                 if (local == null || remote.updatedAt > local.updatedAt) db.jobs().upsert(remote)
+            }
+            json.optJSONArray("todos")?.forEachObject { o ->
+                val remote = o.toTodo()
+                val local = db.todos().get(remote.id)
+                if (local == null || remote.updatedAt > local.updatedAt) {
+                    db.todos().upsert(remote)
+                    TodoScheduler.sync(context, remote)
+                }
             }
             json.optJSONArray("work_entries")?.forEachObject { o ->
                 val remote = o.toWorkEntry()
@@ -135,6 +146,16 @@ private fun JSONObject.toCustomer() = Customer(
     phone = optString("phone"), email = optString("email"), address = optString("address"),
     postalCode = optString("postalCode"), city = optString("city"), orgNumber = optString("orgNumber"),
     propertyId = optString("propertyId"), notes = optString("notes"), finished = optBoolean("finished"),
+    updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
+)
+
+private fun Todo.toJson() = JSONObject()
+    .put("id", id).put("title", title).put("notes", notes).put("jobId", jobId).put("dueAt", dueAt)
+    .put("done", done).put("updatedAt", updatedAt).put("deleted", deleted)
+
+private fun JSONObject.toTodo() = Todo(
+    id = getString("id"), title = getString("title"), notes = optString("notes"), jobId = optString("jobId"),
+    dueAt = optLong("dueAt"), done = optBoolean("done"),
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )
 

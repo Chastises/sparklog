@@ -103,6 +103,16 @@ def main():
         got = post({"since": 0})["materials"][0]
         assert got["unitPrice"] == 12.5 and got["source"] == "invoice" and got["jobId"] == "j1"
 
+        # todos: epoch-millis due time and done flag round-trip, completion syncs
+        due = 1795600000000
+        todo = {"id": "td1", "title": "Order cable", "notes": "3G1.5", "jobId": "j1", "dueAt": due,
+                "done": False, "updatedAt": 8000, "deleted": False}
+        post({"since": 0, "todos": [todo]})
+        got = post({"since": 0})["todos"][0]
+        assert got["dueAt"] == due and got["done"] is False and got["title"] == "Order cable"
+        post({"since": 0, "todos": [dict(todo, done=True, updatedAt=9000)]})
+        assert post({"since": 0})["todos"][0]["done"] is True
+
         # bad payload
         try:
             post({"since": 0, "trips": [{"id": "x"}]}); raise AssertionError("expected 400")

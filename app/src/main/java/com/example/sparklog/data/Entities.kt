@@ -81,3 +81,16 @@ data class Material(
     val updatedAt: Long = System.currentTimeMillis(),
     val deleted: Boolean = false,
 )
+
+/** A to-do item. dueAt is epoch millis of the reminder time; 0 = no reminder / no due time. */
+@Entity(tableName = "todos")
+data class Todo(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val title: String,
+    val notes: String = "",
+    val jobId: String = "",
+    val dueAt: Long = 0L,
+    val done: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis(),
+    val deleted: Boolean = false,
+)

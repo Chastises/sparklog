@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val openToday = intent?.getBooleanExtra("openToday", false) == true
+        val openTab = intent?.getStringExtra("openTab")
         setContent {
             val askNotifications = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission()
@@ -26,7 +27,7 @@ class MainActivity : ComponentActivity() {
             }
             MaterialTheme {
                 Surface {
-                    SparkLogRoot(initialDay = if (openToday) LocalDate.now() else null)
+                    SparkLogRoot(initialDay = if (openToday) LocalDate.now() else null, initialTab = openTab)
                 }
             }
         }

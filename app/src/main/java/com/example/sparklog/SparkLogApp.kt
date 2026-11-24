@@ -15,6 +15,9 @@ class SparkLogApp : Application() {
             NotificationChannel(CHANNEL_REMINDER, "Daily reminder", NotificationManager.IMPORTANCE_DEFAULT)
         )
         nm.createNotificationChannel(
+            NotificationChannel(CHANNEL_TODO, "To-do reminders", NotificationManager.IMPORTANCE_HIGH)
+        )
+        nm.createNotificationChannel(
             NotificationChannel(CHANNEL_TRIP, "Trip tracking", NotificationManager.IMPORTANCE_LOW)
         )
         val prefs = Prefs(this)
@@ -25,5 +28,6 @@ class SparkLogApp : Application() {
     companion object {
         const val CHANNEL_REMINDER = "reminder"
         const val CHANNEL_TRIP = "trip"
+        const val CHANNEL_TODO = "todo"
     }
 }
