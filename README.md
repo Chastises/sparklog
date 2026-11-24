@@ -4,7 +4,7 @@ Android app for an electrician's daily record keeping: calendar, driving (manual
 
 ## What's in it
 
-- **Home**: first screen. Today's hours, trips and materials with a prompt if today isn't logged, open and overdue to-dos, month totals, a warning for invoice lines needing a job, and a pinned notes card (saved on the phone only). Settings opens from the gear; shortcuts jump to Drive, Materials and Customers.
+- **Home**: first screen. Today's hours, trips and materials with a prompt if today isn't logged, open and overdue to-dos, month totals, a warning for invoice lines needing a job, and a pinned notes card (saved on the phone only). Settings opens from the gear.
 - **To-do**: list with checkboxes, optional job, and an optional reminder date and time that triggers a notification (scheduled with WorkManager, so it can be a few minutes late in battery saving mode). Done items are tucked away. To-dos sync to the server.
 - **Jobs tab**: one place for everything that belongs to a job, with sections Jobs, Customers, Drive and Materials. The bottom bar is Home, Calendar, Jobs, To-do.
 - **Jobs**: every job has a unique number (plain counter, starting at 1001) and belongs to a customer. A customer can have many jobs. Jobs have Ongoing/Finished lists with hours and material cost; finished jobs disappear from the job dropdowns. Create jobs from the Jobs tab or with "+ New job" in any dropdown. If two phones create the same number, the server renumbers the later one.

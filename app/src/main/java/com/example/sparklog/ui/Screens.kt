@@ -44,6 +44,8 @@ import com.example.sparklog.data.Todo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.material3.Card
@@ -171,9 +173,12 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
 fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit) {
     val titles = listOf("Jobs", "Customers", "Drive", "Materials")
     Column(Modifier.fillMaxSize()) {
-        TabRow(selectedTabIndex = section) {
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             titles.forEachIndexed { i, title ->
-                Tab(selected = section == i, onClick = { onSection(i) }, text = { Text(title) })
+                FilterChip(selected = section == i, onClick = { onSection(i) }, label = { Text(title) })
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -293,12 +298,6 @@ fun HomeScreen(
                 Text("Saved on this phone only.", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
             }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onOpenJobs(2) }, modifier = Modifier.weight(1f)) { Text("Drive") }
-            OutlinedButton(onClick = { onOpenJobs(3) }, modifier = Modifier.weight(1f)) { Text("Materials") }
-            OutlinedButton(onClick = { onOpenJobs(1) }, modifier = Modifier.weight(1f)) { Text("Customers") }
         }
     }
 
@@ -712,7 +711,7 @@ fun JobsScreen(vm: MainVm) {
     val customers by vm.customers.collectAsState(emptyList())
     val work by vm.allWork.collectAsState(emptyList())
     val materials by vm.allMaterials.collectAsState(emptyList())
-    var tab by rememberSaveable { mutableIntStateOf(0) } // 0 ongoing, 1 finished
+    var showFinished by rememberSaveable { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<Any?>(null) }
 
     val custNames = customers.associate { it.id to it.name }
@@ -721,30 +720,31 @@ fun JobsScreen(vm: MainVm) {
     val ongoing = jobs.filter { !it.finished }
     val finished = jobs.filter { it.finished }
 
+    @Composable
+    fun row(j: Job) {
+        val cost = costByJob[j.id] ?: 0.0
+        ListItem(
+            headlineContent = { Text(jobLabel(j, custNames)) },
+            supportingContent = { if (cost > 0) Text("Materials: ${money(cost)} kr") },
+            trailingContent = { Text("${fmt(hoursByJob[j.id] ?: 0.0)} h") },
+            modifier = Modifier.clickable { dialog = j },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
+
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            TabRow(selectedTabIndex = tab) {
-                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Ongoing (${ongoing.size})") })
-                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Finished (${finished.size})") })
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+            if (ongoing.isEmpty()) {
+                item { EmptyHint("No ongoing jobs. Tap + to add one.") }
             }
-            val shown = if (tab == 0) ongoing else finished
-            if (shown.isEmpty()) {
-                Text(
-                    if (tab == 1) "No finished jobs." else "No ongoing jobs. Tap + to add one.",
-                    Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
-                items(shown, key = { it.id }) { j ->
-                    val cost = costByJob[j.id] ?: 0.0
-                    ListItem(
-                        headlineContent = { Text(jobLabel(j, custNames)) },
-                        supportingContent = { if (cost > 0) Text("Materials: ${money(cost)} kr") },
-                        trailingContent = { Text("${fmt(hoursByJob[j.id] ?: 0.0)} h") },
-                        modifier = Modifier.clickable { dialog = j },
-                    )
-                    HorizontalDivider()
+            items(ongoing, key = { it.id }) { row(it) }
+            if (finished.isNotEmpty()) {
+                item {
+                    TextButton(onClick = { showFinished = !showFinished }, modifier = Modifier.padding(start = 8.dp)) {
+                        Text(if (showFinished) "Hide finished (${finished.size})" else "Show finished (${finished.size})")
+                    }
                 }
+                if (showFinished) items(finished, key = { it.id }) { row(it) }
             }
         }
         FloatingActionButton(
@@ -772,42 +772,43 @@ fun CustomersScreen(vm: MainVm) {
 
     val hoursBy = work.groupBy { it.customerId }.mapValues { (_, v) -> v.sumOf { it.hours } }
     val ongoingJobsBy = jobs.filter { !it.finished }.groupBy { it.customerId }.mapValues { it.value.size }
-    val shown = customers.filter { it.finished == showFinished }
-    val ongoingCount = customers.count { !it.finished }
-    val finishedCount = customers.size - ongoingCount
+    val ongoing = customers.filter { !it.finished }
+    val finished = customers.filter { it.finished }
+
+    @Composable
+    fun row(c: Customer) {
+        val place = listOf(c.address, listOf(c.postalCode, c.city).filter { it.isNotBlank() }.joinToString(" "))
+            .filter { it.isNotBlank() }.joinToString(", ")
+        val openJobs = ongoingJobsBy[c.id] ?: 0
+        ListItem(
+            headlineContent = { Text(c.name) },
+            supportingContent = {
+                Column {
+                    if (place.isNotBlank()) Text(place)
+                    val contact = listOf(c.contactPerson, c.phone).filter { it.isNotBlank() }.joinToString(" · ")
+                    if (contact.isNotBlank()) Text(contact)
+                    if (openJobs > 0) Text("$openJobs ongoing job" + if (openJobs > 1) "s" else "")
+                }
+            },
+            trailingContent = { Text("${fmt(hoursBy[c.id] ?: 0.0)} h") },
+            modifier = Modifier.clickable { dialog = c },
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    }
 
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
-            TabRow(selectedTabIndex = if (showFinished) 1 else 0) {
-                Tab(selected = !showFinished, onClick = { showFinished = false }, text = { Text("Ongoing ($ongoingCount)") })
-                Tab(selected = showFinished, onClick = { showFinished = true }, text = { Text("Finished ($finishedCount)") })
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+            if (ongoing.isEmpty()) {
+                item { EmptyHint("No ongoing customers. Tap + to add one.") }
             }
-            if (shown.isEmpty()) {
-                Text(
-                    if (showFinished) "No finished customers." else "No ongoing customers. Tap + to add one.",
-                    Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
-                items(shown, key = { it.id }) { c ->
-                    val place = listOf(c.address, listOf(c.postalCode, c.city).filter { it.isNotBlank() }.joinToString(" "))
-                        .filter { it.isNotBlank() }.joinToString(", ")
-                    val openJobs = ongoingJobsBy[c.id] ?: 0
-                    ListItem(
-                        headlineContent = { Text(c.name) },
-                        supportingContent = {
-                            Column {
-                                if (place.isNotBlank()) Text(place)
-                                val contact = listOf(c.contactPerson, c.phone).filter { it.isNotBlank() }.joinToString(" · ")
-                                if (contact.isNotBlank()) Text(contact)
-                                if (openJobs > 0) Text("$openJobs ongoing job" + if (openJobs > 1) "s" else "")
-                            }
-                        },
-                        trailingContent = { Text("${fmt(hoursBy[c.id] ?: 0.0)} h") },
-                        modifier = Modifier.clickable { dialog = c },
-                    )
-                    HorizontalDivider()
+            items(ongoing, key = { it.id }) { row(it) }
+            if (finished.isNotEmpty()) {
+                item {
+                    TextButton(onClick = { showFinished = !showFinished }, modifier = Modifier.padding(start = 8.dp)) {
+                        Text(if (showFinished) "Hide finished (${finished.size})" else "Show finished (${finished.size})")
+                    }
                 }
+                if (showFinished) items(finished, key = { it.id }) { row(it) }
             }
         }
         FloatingActionButton(
