@@ -26,11 +26,24 @@ data class Customer(
     val deleted: Boolean = false,
 )
 
+/** A piece of work for a customer. [number] is a plain counter, unique across all jobs. */
+@Entity(tableName = "jobs")
+data class Job(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val number: Int = 0, // 0 = not assigned yet; MainVm gives the next free number on first save
+    val customerId: String = "",
+    val title: String = "",
+    val finished: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis(),
+    val deleted: Boolean = false,
+)
+
 @Entity(tableName = "work_entries")
 data class WorkEntry(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val date: String,
-    val customerId: String = "",
+    val jobId: String = "",
+    val customerId: String = "", // copied from the job when saved
     val description: String = "",
     val hours: Double = 0.0,
     val updatedAt: Long = System.currentTimeMillis(),
@@ -41,6 +54,7 @@ data class WorkEntry(
 data class Trip(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val date: String,
+    val jobId: String = "",
     val customerId: String = "",
     val fromPlace: String = "",
     val toPlace: String = "",
@@ -55,10 +69,15 @@ data class Trip(
 data class Material(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val date: String,
+    val jobId: String = "", // "" = not assigned to a job (e.g. imported invoice line needing a job)
     val customerId: String = "",
     val name: String,
     val quantity: Double = 1.0,
     val unit: String = "pcs",
+    val unitPrice: Double = 0.0, // ex VAT, per unit; 0 = unknown
+    val supplier: String = "",
+    val invoiceRef: String = "",
+    val source: String = "manual", // "manual" or "invoice" (imported from email)
     val updatedAt: Long = System.currentTimeMillis(),
     val deleted: Boolean = false,
 )

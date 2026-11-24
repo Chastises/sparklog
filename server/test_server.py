@@ -81,6 +81,28 @@ def main():
         e = post({"since": f["serverTime"]})
         assert e["customers"] == [] and e["work_entries"] == [] and e["trips"] == [] and e["materials"] == []
 
+        # jobs: two phones both create job 1001 -> second one is renumbered, no duplicates
+        j1 = {"id": "j1", "number": 1001, "customerId": "c1", "title": "Fuse box", "finished": False,
+              "updatedAt": 6000, "deleted": False}
+        j2 = {"id": "j2", "number": 1001, "customerId": "c1", "title": "Kitchen", "finished": False,
+              "updatedAt": 6001, "deleted": False}
+        r1 = post({"since": e["serverTime"], "jobs": [j1]})
+        r2 = post({"since": r1["serverTime"], "jobs": [j2]})
+        nums = {j["id"]: j["number"] for j in r2["jobs"]}
+        assert nums["j2"] == 1002, nums
+        assert r2["jobs"][0]["updatedAt"] > 6001  # bumped, so the phone accepts the corrected row
+        everything = post({"since": 0})
+        numbers = [j["number"] for j in everything["jobs"]]
+        assert sorted(numbers) == [1001, 1002], numbers
+
+        # material with invoice fields round-trips
+        m = {"id": "m1", "date": "2026-11-24", "jobId": "j1", "customerId": "c1", "name": "Cable 3G1.5",
+             "quantity": 100, "unit": "m", "unitPrice": 12.5, "supplier": "Ahlsell", "invoiceRef": "INV-9",
+             "source": "invoice", "updatedAt": 7000, "deleted": False}
+        post({"since": 0, "materials": [m]})
+        got = post({"since": 0})["materials"][0]
+        assert got["unitPrice"] == 12.5 and got["source"] == "invoice" and got["jobId"] == "j1"
+
         # bad payload
         try:
             post({"since": 0, "trips": [{"id": "x"}]}); raise AssertionError("expected 400")

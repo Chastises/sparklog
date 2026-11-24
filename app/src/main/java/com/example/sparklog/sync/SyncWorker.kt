@@ -12,6 +12,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.example.sparklog.data.AppDb
 import com.example.sparklog.data.Customer
+import com.example.sparklog.data.Job
 import com.example.sparklog.data.Material
 import com.example.sparklog.data.Prefs
 import com.example.sparklog.data.Trip
@@ -70,6 +71,7 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
             val body = JSONObject().apply {
                 put("since", prefs.lastPull)
                 put("customers", JSONArray(db.customers().changedSince(since).map { it.toJson() }))
+                put("jobs", JSONArray(db.jobs().changedSince(since).map { it.toJson() }))
                 put("work_entries", JSONArray(db.work().changedSince(since).map { it.toJson() }))
                 put("trips", JSONArray(db.trips().changedSince(since).map { it.toJson() }))
                 put("materials", JSONArray(db.materials().changedSince(since).map { it.toJson() }))
@@ -90,6 +92,11 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
                 val remote = o.toCustomer()
                 val local = db.customers().get(remote.id)
                 if (local == null || remote.updatedAt > local.updatedAt) db.customers().upsert(remote)
+            }
+            json.optJSONArray("jobs")?.forEachObject { o ->
+                val remote = o.toJob()
+                val local = db.jobs().get(remote.id)
+                if (local == null || remote.updatedAt > local.updatedAt) db.jobs().upsert(remote)
             }
             json.optJSONArray("work_entries")?.forEachObject { o ->
                 val remote = o.toWorkEntry()
@@ -131,36 +138,51 @@ private fun JSONObject.toCustomer() = Customer(
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )
 
+private fun Job.toJson() = JSONObject()
+    .put("id", id).put("number", number).put("customerId", customerId).put("title", title)
+    .put("finished", finished).put("updatedAt", updatedAt).put("deleted", deleted)
+
+private fun JSONObject.toJob() = Job(
+    id = getString("id"), number = optInt("number"), customerId = optString("customerId"),
+    title = optString("title"), finished = optBoolean("finished"),
+    updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
+)
+
 private fun WorkEntry.toJson() = JSONObject()
-    .put("id", id).put("date", date).put("customerId", customerId).put("description", description)
+    .put("id", id).put("date", date).put("jobId", jobId).put("customerId", customerId).put("description", description)
     .put("hours", hours).put("updatedAt", updatedAt).put("deleted", deleted)
 
 private fun JSONObject.toWorkEntry() = WorkEntry(
-    id = getString("id"), date = getString("date"), customerId = optString("customerId"),
+    id = getString("id"), date = getString("date"), jobId = optString("jobId"),
+    customerId = optString("customerId"),
     description = optString("description"), hours = optDouble("hours"),
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )
 
 private fun Trip.toJson() = JSONObject()
-    .put("id", id).put("date", date).put("customerId", customerId)
+    .put("id", id).put("date", date).put("jobId", jobId).put("customerId", customerId)
     .put("fromPlace", fromPlace).put("toPlace", toPlace)
     .put("km", km).put("purpose", purpose).put("source", source)
     .put("updatedAt", updatedAt).put("deleted", deleted)
 
 private fun JSONObject.toTrip() = Trip(
-    id = getString("id"), date = getString("date"), customerId = optString("customerId"),
-    fromPlace = optString("fromPlace"),
+    id = getString("id"), date = getString("date"), jobId = optString("jobId"),
+    customerId = optString("customerId"), fromPlace = optString("fromPlace"),
     toPlace = optString("toPlace"), km = optDouble("km"), purpose = optString("purpose"),
     source = optString("source", "manual"), updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )
 
 private fun Material.toJson() = JSONObject()
-    .put("id", id).put("date", date).put("customerId", customerId).put("name", name).put("quantity", quantity)
-    .put("unit", unit).put("updatedAt", updatedAt).put("deleted", deleted)
+    .put("id", id).put("date", date).put("jobId", jobId).put("customerId", customerId)
+    .put("name", name).put("quantity", quantity).put("unit", unit).put("unitPrice", unitPrice)
+    .put("supplier", supplier).put("invoiceRef", invoiceRef).put("source", source)
+    .put("updatedAt", updatedAt).put("deleted", deleted)
 
 private fun JSONObject.toMaterial() = Material(
-    id = getString("id"), date = getString("date"), customerId = optString("customerId"),
-    name = getString("name"),
+    id = getString("id"), date = getString("date"), jobId = optString("jobId"),
+    customerId = optString("customerId"), name = getString("name"),
     quantity = optDouble("quantity", 1.0), unit = optString("unit", "pcs"),
+    unitPrice = optDouble("unitPrice", 0.0), supplier = optString("supplier"),
+    invoiceRef = optString("invoiceRef"), source = optString("source", "manual"),
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )

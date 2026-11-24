@@ -4,8 +4,9 @@ Android app for an electrician's daily record keeping: calendar, driving (manual
 
 ## What's in it
 
+- **Jobs**: every job has a unique number (plain counter, starting at 1001) and belongs to a customer. A customer can have many jobs. Jobs have Ongoing/Finished lists with hours and material cost; finished jobs disappear from the job dropdowns. Create jobs from the Jobs tab or with "+ New job" in any dropdown. If two phones create the same number, the server renumbers the later one.
 - **Customers**: name, contact person, phone, email, address, org/ID number, property designation (for ROT), notes. Ongoing/Finished tabs; finishing a customer hides it from the dropdowns. Shows total hours per customer.
-- **Work hours**: per day, per customer (dropdown, with "+ New customer" inline). Trips and materials can be tied to a customer the same way.
+- **Work hours**: per day, per job (dropdown, with "+ New job" inline). Trips and materials are tied to a job the same way.
 - **Calendar**: month view, dots for work/driving/materials per day, red day number for past weekdays with no work logged, month totals. Tap a day to add or edit entries.
 - **Drive**: GPS trip recorder (foreground service, sums distance, saves a trip on stop) plus manual trips. Tap a trip to edit.
 - **Materials**: log material, quantity, unit and customer per day.
@@ -38,9 +39,32 @@ In the app: Settings, enter `http://<server-ip>:8787` and the token, then "Sync 
 
 Tests: `python3 -I server/test_server.py`
 
+## Importing material invoices from email
+
+The server can read a mailbox, find PDF invoices, and add every material line to the right job.
+
+1. Use a dedicated mailbox (or an alias that forwards to one) with IMAP enabled and an app password.
+2. On the server: `apt install poppler-utils` (provides `pdftotext`).
+3. Start the server with the mailbox settings:
+
+```
+SPARKLOG_IMAP_HOST=imap.example.com SPARKLOG_IMAP_USER=invoices@example.com \
+SPARKLOG_IMAP_PASSWORD=app-password SPARKLOG_ALLOWED_SENDERS=ahlsell.se,onninen.se \
+SPARKLOG_TOKEN=... python3 server.py
+```
+
+4. **When ordering from the supplier, put the job number in the order reference**, for example `Jobb 1042` (the invoice then shows it as "Er referens" or "Märkning"). Writing `#1042` in the email subject also works. Only numbers that match an existing job are accepted.
+
+Lines whose job can't be found are still imported, marked NEEDS JOB in the Materials tab; tap one to assign a job. A PDF that can't be read becomes one "UNREAD INVOICE" line. PDFs are kept in `invoices/` on the server. Importing the same mail twice does nothing.
+
+Supplier invoice layouts differ, and the line parser is heuristic. Test a real invoice with `python3 invoice.py invoice.pdf` and send me samples if lines are missed. Settings are listed at the top of `server/mailimport.py`.
+
+Tests: `python3 server/test_invoice.py`
+
 ## Known gaps / next steps
 
 - No export (CSV/PDF for invoicing or tax) yet.
+- If an invoice arrives before the job reaches the server (phone offline), its lines are imported without a job and need assigning by hand.
 - GPS trips are lost if Android kills the service mid-trip; no route or from/to place names are recorded.
 - Reminder time is set by typing hour and minute; no time picker.
 - Reminder uses WorkManager, so it can fire a few minutes late under battery optimization.

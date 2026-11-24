@@ -8,7 +8,45 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import android.content.Context
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
+
+/** v1 -> v2: jobs table, jobId on entries, invoice fields on materials. Keeps all existing data. */
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `jobs` (`id` TEXT NOT NULL, `number` INTEGER NOT NULL, " +
+                "`customerId` TEXT NOT NULL, `title` TEXT NOT NULL, `finished` INTEGER NOT NULL, " +
+                "`updatedAt` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, PRIMARY KEY(`id`))"
+        )
+        db.execSQL("ALTER TABLE `work_entries` ADD COLUMN `jobId` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `trips` ADD COLUMN `jobId` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `materials` ADD COLUMN `jobId` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `materials` ADD COLUMN `unitPrice` REAL NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE `materials` ADD COLUMN `supplier` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `materials` ADD COLUMN `invoiceRef` TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE `materials` ADD COLUMN `source` TEXT NOT NULL DEFAULT 'manual'")
+    }
+}
+
+@Dao
+interface JobDao {
+    @Query("SELECT * FROM jobs WHERE deleted = 0 ORDER BY number DESC")
+    fun observeAll(): Flow<List<Job>>
+
+    @Query("SELECT MAX(number) FROM jobs")
+    suspend fun maxNumber(): Int?
+
+    @Query("SELECT * FROM jobs WHERE updatedAt > :since")
+    suspend fun changedSince(since: Long): List<Job>
+
+    @Query("SELECT * FROM jobs WHERE id = :id")
+    suspend fun get(id: String): Job?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: Job)
+}
 
 @Dao
 interface CustomerDao {
@@ -81,6 +119,9 @@ interface MaterialDao {
     @Query("SELECT * FROM materials WHERE deleted = 0 ORDER BY date DESC, updatedAt DESC LIMIT 300")
     fun observeRecent(): Flow<List<Material>>
 
+    @Query("SELECT * FROM materials WHERE deleted = 0")
+    fun observeAll(): Flow<List<Material>>
+
     @Query("SELECT * FROM materials WHERE updatedAt > :since")
     suspend fun changedSince(since: Long): List<Material>
 
@@ -91,8 +132,13 @@ interface MaterialDao {
     suspend fun upsert(item: Material)
 }
 
-@Database(entities = [Customer::class, WorkEntry::class, Trip::class, Material::class], version = 1, exportSchema = false)
+@Database(
+    entities = [Customer::class, Job::class, WorkEntry::class, Trip::class, Material::class],
+    version = 2,
+    exportSchema = false,
+)
 abstract class AppDb : RoomDatabase() {
+    abstract fun jobs(): JobDao
     abstract fun customers(): CustomerDao
     abstract fun work(): WorkDao
     abstract fun trips(): TripDao
@@ -102,6 +148,7 @@ abstract class AppDb : RoomDatabase() {
         @Volatile private var instance: AppDb? = null
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "sparklog.db")
+                .addMigrations(MIGRATION_1_2)
                 .build().also { instance = it }
         }
     }

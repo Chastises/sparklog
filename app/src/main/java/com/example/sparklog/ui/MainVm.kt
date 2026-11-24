@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sparklog.data.AppDb
 import com.example.sparklog.data.Customer
+import com.example.sparklog.data.Job
 import com.example.sparklog.data.Material
 import com.example.sparklog.data.Prefs
 import com.example.sparklog.data.Trip
@@ -26,6 +27,18 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
     fun materialsMonth(m: YearMonth) = db.materials().observeRange(m.atDay(1).toString(), m.atEndOfMonth().toString())
 
     val customers = db.customers().observeAll()
+    val jobs = db.jobs().observeAll()
+    val allMaterials = db.materials().observeAll()
+
+    /** Saves a job. A new job (number 0) gets the next free number. */
+    fun save(j: Job) {
+        viewModelScope.launch {
+            val number = if (j.number > 0) j.number else maxOf(db.jobs().maxNumber() ?: 0, 1000) + 1
+            db.jobs().upsert(j.copy(number = number, updatedAt = now()))
+            SyncWorker.syncSoon(app)
+        }
+    }
+    fun delete(j: Job) = launchSync { db.jobs().upsert(j.copy(deleted = true, updatedAt = now())) }
     val allWork = db.work().observeAll()
 
     fun save(c: Customer) = launchSync { db.customers().upsert(c.copy(updatedAt = now())) }

@@ -32,11 +32,12 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import com.example.sparklog.data.Customer
+import com.example.sparklog.data.Job
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -106,7 +107,7 @@ fun SparkLogRoot(initialDay: LocalDate?, vm: MainVm = viewModel()) {
                     "Calendar" to Icons.Default.CalendarMonth,
                     "Drive" to Icons.Default.DirectionsCar,
                     "Materials" to Icons.Default.Build,
-                    "Customers" to Icons.Default.People,
+                    "Jobs" to Icons.Default.Work,
                     "Settings" to Icons.Default.Settings,
                 )
                 items.forEachIndexed { i, (label, icon) ->
@@ -125,7 +126,7 @@ fun SparkLogRoot(initialDay: LocalDate?, vm: MainVm = viewModel()) {
                 0 -> CalendarScreen(vm, onOpenDay = { day = it.toString() })
                 1 -> DriveScreen(vm)
                 2 -> MaterialsScreen(vm)
-                3 -> CustomersScreen(vm)
+                3 -> JobsScreen(vm)
                 else -> SettingsScreen(vm)
             }
         }
@@ -241,8 +242,7 @@ fun DayScreen(vm: MainVm, date: LocalDate, onBack: () -> Unit) {
     val work by remember(ds) { vm.workDay(ds) }.collectAsState(emptyList())
     val trips by remember(ds) { vm.tripsDay(ds) }.collectAsState(emptyList())
     val materials by remember(ds) { vm.materialsDay(ds) }.collectAsState(emptyList())
-    val customers by vm.customers.collectAsState(emptyList())
-    val names = customers.associate { it.id to it.name }
+    val names = rememberNames(vm)
     var dialog by remember { mutableStateOf<Any?>(null) }
 
     Scaffold(
@@ -257,7 +257,7 @@ fun DayScreen(vm: MainVm, date: LocalDate, onBack: () -> Unit) {
             SectionHeader("Work", "${fmt(work.sumOf { it.hours })} h") { dialog = "newWork" }
             work.forEach { w ->
                 ListItem(
-                    headlineContent = { Text(customerLabel(names, w.customerId, "Work") + " · ${fmt(w.hours)} h") },
+                    headlineContent = { Text(customerLabel(names, w.jobId.ifBlank { w.customerId }, "Work") + " · ${fmt(w.hours)} h") },
                     supportingContent = { if (w.description.isNotBlank()) Text(w.description) },
                     modifier = Modifier.clickable { dialog = w },
                 )
@@ -285,7 +285,20 @@ fun DayScreen(vm: MainVm, date: LocalDate, onBack: () -> Unit) {
     }
 }
 
-/** Customer name for display; [fallback] when the entry has no customer. */
+/** Display names keyed by id, for both jobs ("#1042 Andersson - Fuse box") and customers. */
+@Composable
+private fun rememberNames(vm: MainVm): Map<String, String> {
+    val jobs by vm.jobs.collectAsState(emptyList())
+    val customers by vm.customers.collectAsState(emptyList())
+    return remember(jobs, customers) {
+        val c = customers.associate { it.id to it.name }
+        c + jobs.associate { it.id to jobLabel(it, c) }
+    }
+}
+
+private fun money(d: Double) = "%.2f".format(d)
+
+/** Name for display; [fallback] when the id is blank. */
 private fun customerLabel(names: Map<String, String>, id: String, fallback: String): String =
     if (id.isBlank()) fallback else names[id] ?: "Unknown customer"
 
@@ -311,7 +324,7 @@ private fun TripRow(t: Trip, names: Map<String, String>, showDate: Boolean, onCl
     val route = listOf(t.fromPlace, t.toPlace).filter { it.isNotBlank() }.joinToString(" → ").ifBlank { "Trip" }
     val details = listOfNotNull(
         if (showDate) t.date else null,
-        if (t.customerId.isNotBlank()) customerLabel(names, t.customerId, "") else null,
+        t.jobId.ifBlank { t.customerId }.takeIf { it.isNotBlank() }?.let { customerLabel(names, it, "") },
         t.purpose.ifBlank { null },
         if (t.source == "gps") "GPS" else null,
     ).joinToString(" · ")
@@ -324,9 +337,12 @@ private fun TripRow(t: Trip, names: Map<String, String>, showDate: Boolean, onCl
 
 @Composable
 private fun MaterialRow(m: Material, names: Map<String, String>, showDate: Boolean, onClick: () -> Unit) {
+    val ref = m.jobId.ifBlank { m.customerId }
     val details = listOfNotNull(
         if (showDate) m.date else null,
-        if (m.customerId.isNotBlank()) customerLabel(names, m.customerId, "") else null,
+        if (ref.isNotBlank()) customerLabel(names, ref, "") else if (m.source == "invoice") "NEEDS JOB" else null,
+        if (m.unitPrice > 0) "${money(m.quantity * m.unitPrice)} kr" else null,
+        m.supplier.ifBlank { null },
     ).joinToString(" · ")
     ListItem(
         headlineContent = { Text("${m.name} · ${fmt(m.quantity)} ${m.unit}") },
@@ -343,8 +359,7 @@ fun DriveScreen(vm: MainVm) {
     val running by TripTrackingService.running.collectAsStateWithLifecycle()
     val liveKm by TripTrackingService.km.collectAsStateWithLifecycle()
     val trips by vm.recentTrips.collectAsState(emptyList())
-    val customers by vm.customers.collectAsState(emptyList())
-    val names = customers.associate { it.id to it.name }
+    val names = rememberNames(vm)
     var purpose by rememberSaveable { mutableStateOf("") }
     var dialog by remember { mutableStateOf<Any?>(null) }
 
@@ -402,16 +417,27 @@ fun DriveScreen(vm: MainVm) {
 @Composable
 fun MaterialsScreen(vm: MainVm) {
     val items by vm.recentMaterials.collectAsState(emptyList())
-    val customers by vm.customers.collectAsState(emptyList())
-    val names = customers.associate { it.id to it.name }
+    val names = rememberNames(vm)
     var dialog by remember { mutableStateOf<Any?>(null) }
     val today = LocalDate.now().toString()
 
     Box(Modifier.fillMaxSize()) {
+        val needJob = items.count { it.source == "invoice" && it.jobId.isBlank() }
+        if (needJob > 0) {
+            Card(Modifier.fillMaxWidth().padding(12.dp)) {
+                Text(
+                    "$needJob imported invoice lines need a job. Tap a line marked NEEDS JOB to assign one.",
+                    Modifier.padding(12.dp),
+                )
+            }
+        }
         if (items.isEmpty()) {
             Text("No materials logged yet.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = if (needJob > 0) 76.dp else 0.dp, bottom = 88.dp),
+        ) {
             items(items, key = { it.id }) { m -> MaterialRow(m, names, showDate = true) { dialog = m } }
         }
         FloatingActionButton(
@@ -427,60 +453,88 @@ fun MaterialsScreen(vm: MainVm) {
     }
 }
 
-// ---------------------------------------------------------------- customers
+// ---------------------------------------------------------------- jobs and customers
 
 @Composable
-fun CustomersScreen(vm: MainVm) {
+fun JobsScreen(vm: MainVm) {
+    val jobs by vm.jobs.collectAsState(emptyList())
     val customers by vm.customers.collectAsState(emptyList())
     val work by vm.allWork.collectAsState(emptyList())
-    var showFinished by rememberSaveable { mutableStateOf(false) }
+    val materials by vm.allMaterials.collectAsState(emptyList())
+    var tab by rememberSaveable { mutableIntStateOf(0) } // 0 ongoing, 1 finished, 2 customers
     var dialog by remember { mutableStateOf<Any?>(null) }
 
-    val hoursBy = work.groupBy { it.customerId }.mapValues { (_, v) -> v.sumOf { it.hours } }
-    val shown = customers.filter { it.finished == showFinished }
-    val ongoingCount = customers.count { !it.finished }
-    val finishedCount = customers.size - ongoingCount
+    val custNames = customers.associate { it.id to it.name }
+    val hoursByJob = work.groupBy { it.jobId }.mapValues { (_, v) -> v.sumOf { it.hours } }
+    val costByJob = materials.groupBy { it.jobId }.mapValues { (_, v) -> v.sumOf { it.quantity * it.unitPrice } }
+    val hoursByCustomer = work.groupBy { it.customerId }.mapValues { (_, v) -> v.sumOf { it.hours } }
+    val ongoing = jobs.filter { !it.finished }
+    val finished = jobs.filter { it.finished }
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            TabRow(selectedTabIndex = if (showFinished) 1 else 0) {
-                Tab(selected = !showFinished, onClick = { showFinished = false }, text = { Text("Ongoing ($ongoingCount)") })
-                Tab(selected = showFinished, onClick = { showFinished = true }, text = { Text("Finished ($finishedCount)") })
+            TabRow(selectedTabIndex = tab) {
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Ongoing (${ongoing.size})") })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Finished (${finished.size})") })
+                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Customers") })
             }
-            if (shown.isEmpty()) {
-                Text(
-                    if (showFinished) "No finished customers." else "No ongoing customers. Tap + to add one.",
-                    Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
-                items(shown, key = { it.id }) { c ->
-                    val place = listOf(c.address, listOf(c.postalCode, c.city).filter { it.isNotBlank() }.joinToString(" "))
-                        .filter { it.isNotBlank() }.joinToString(", ")
-                    ListItem(
-                        headlineContent = { Text(c.name) },
-                        supportingContent = {
-                            Column {
-                                if (place.isNotBlank()) Text(place)
-                                val contact = listOf(c.contactPerson, c.phone).filter { it.isNotBlank() }.joinToString(" · ")
-                                if (contact.isNotBlank()) Text(contact)
-                            }
-                        },
-                        trailingContent = { Text("${fmt(hoursBy[c.id] ?: 0.0)} h") },
-                        modifier = Modifier.clickable { dialog = c },
+
+            if (tab < 2) {
+                val shown = if (tab == 0) ongoing else finished
+                if (shown.isEmpty()) {
+                    Text(
+                        if (tab == 1) "No finished jobs." else "No ongoing jobs. Tap + to add one.",
+                        Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    HorizontalDivider()
+                }
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+                    items(shown, key = { it.id }) { j ->
+                        val cost = costByJob[j.id] ?: 0.0
+                        ListItem(
+                            headlineContent = { Text(jobLabel(j, custNames)) },
+                            supportingContent = { if (cost > 0) Text("Materials: ${money(cost)} kr") },
+                            trailingContent = { Text("${fmt(hoursByJob[j.id] ?: 0.0)} h") },
+                            modifier = Modifier.clickable { dialog = j },
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            } else {
+                if (customers.isEmpty()) {
+                    Text("No customers yet. Tap + to add one.", Modifier.padding(16.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+                    items(customers, key = { it.id }) { c ->
+                        val place = listOf(c.address, listOf(c.postalCode, c.city).filter { it.isNotBlank() }.joinToString(" "))
+                            .filter { it.isNotBlank() }.joinToString(", ")
+                        ListItem(
+                            headlineContent = { Text(c.name + if (c.finished) " (finished)" else "") },
+                            supportingContent = {
+                                Column {
+                                    if (place.isNotBlank()) Text(place)
+                                    val contact = listOf(c.contactPerson, c.phone).filter { it.isNotBlank() }.joinToString(" · ")
+                                    if (contact.isNotBlank()) Text(contact)
+                                }
+                            },
+                            trailingContent = { Text("${fmt(hoursByCustomer[c.id] ?: 0.0)} h") },
+                            modifier = Modifier.clickable { dialog = c },
+                        )
+                        HorizontalDivider()
+                    }
                 }
             }
         }
         FloatingActionButton(
-            onClick = { dialog = "new" },
+            onClick = { dialog = if (tab == 2) "newCustomer" else "newJob" },
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-        ) { Icon(Icons.Default.Add, "Add customer") }
+        ) { Icon(Icons.Default.Add, if (tab == 2) "Add customer" else "Add job") }
     }
 
     when (val d = dialog) {
-        "new" -> CustomerDialog(null, { vm.save(it); dialog = null }, null) { dialog = null }
+        "newJob" -> JobDialog(vm, null, { vm.save(it); dialog = null }, null) { dialog = null }
+        is Job -> JobDialog(vm, d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
+        "newCustomer" -> CustomerDialog(null, { vm.save(it); dialog = null }, null) { dialog = null }
         is Customer -> CustomerDialog(d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
         else -> Unit
     }
