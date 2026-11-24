@@ -107,6 +107,7 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
     var jobsSection by rememberSaveable { mutableIntStateOf(0) } // 0 jobs, 1 customers, 2 drive, 3 materials
     var day by rememberSaveable { mutableStateOf(initialDay?.toString()) }
     var openJob by rememberSaveable { mutableStateOf<String?>(null) }
+    var materialsJob by rememberSaveable { mutableStateOf<String?>(null) } // job id or NO_JOB
     var sub by rememberSaveable { mutableStateOf<String?>(null) } // only "settings"
 
     val selected = day
@@ -115,10 +116,16 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
         DayScreen(vm, LocalDate.parse(selected), onBack = { day = null })
         return
     }
+    val materialsToShow = materialsJob
+    if (materialsToShow != null) {
+        BackHandler { materialsJob = null }
+        JobMaterialsScreen(vm, materialsToShow, onBack = { materialsJob = null })
+        return
+    }
     val jobToShow = openJob
     if (jobToShow != null) {
         BackHandler { openJob = null }
-        JobDetailScreen(vm, jobToShow, onBack = { openJob = null })
+        JobDetailScreen(vm, jobToShow, onBack = { openJob = null }, onOpenMaterials = { materialsJob = it })
         return
     }
     val subScreen = sub
@@ -169,7 +176,7 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
                     onOpenJobs = { section -> jobsSection = section; tab = 2 },
                 )
                 1 -> CalendarScreen(vm, onOpenDay = { day = it.toString() })
-                2 -> JobsHub(vm, jobsSection, onSection = { jobsSection = it }, onOpenJob = { openJob = it })
+                2 -> JobsHub(vm, jobsSection, onSection = { jobsSection = it }, onOpenJob = { openJob = it }, onOpenMaterials = { materialsJob = it })
                 else -> TodoScreen(vm)
             }
         }
@@ -180,7 +187,7 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
 
 /** Everything that hangs off a job lives here: jobs, customers, driving and materials. */
 @Composable
-fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit, onOpenJob: (String) -> Unit) {
+fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit, onOpenJob: (String) -> Unit, onOpenMaterials: (String) -> Unit) {
     val titles = listOf("Jobs", "Customers", "Drive", "Materials")
     Column(Modifier.fillMaxSize()) {
         Row(
@@ -196,7 +203,7 @@ fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit, onOpenJob: (Stri
                 0 -> JobsScreen(vm, onOpenJob)
                 1 -> CustomersScreen(vm)
                 2 -> DriveScreen(vm)
-                else -> MaterialsScreen(vm)
+                else -> MaterialsScreen(vm, onOpenMaterials)
             }
         }
     }
@@ -674,31 +681,59 @@ fun DriveScreen(vm: MainVm) {
 
 // ---------------------------------------------------------------- materials
 
+/** Pseudo job id for material lines that are not assigned to any job yet. */
+const val NO_JOB = "none"
+
+/** Materials overview: one row per job with its total cost. Tap a job for its lines by date. */
 @Composable
-fun MaterialsScreen(vm: MainVm) {
-    val items by vm.recentMaterials.collectAsState(emptyList())
-    val names = rememberNames(vm)
+fun MaterialsScreen(vm: MainVm, onOpenMaterials: (String) -> Unit) {
+    val materials by vm.allMaterials.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState(emptyList())
+    val customers by vm.customers.collectAsState(emptyList())
     var dialog by remember { mutableStateOf<Any?>(null) }
     val today = LocalDate.now().toString()
 
+    val custNames = customers.associate { it.id to it.name }
+    val byJob = materials.filter { it.jobId.isNotBlank() }.groupBy { it.jobId }
+    val unassigned = materials.filter { it.jobId.isBlank() }
+    val rows = jobs.filter { byJob.containsKey(it.id) }
+        .sortedByDescending { j -> byJob[j.id]!!.maxOf { it.date } }
+    val total = materials.sumOf { it.quantity * it.unitPrice }
+
     Box(Modifier.fillMaxSize()) {
-        val needJob = items.count { it.source == "invoice" && it.jobId.isBlank() }
-        if (needJob > 0) {
-            Card(Modifier.fillMaxWidth().padding(12.dp)) {
-                Text(
-                    "$needJob imported invoice lines need a job. Tap a line marked NEEDS JOB to assign one.",
-                    Modifier.padding(12.dp),
-                )
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+            if (materials.isEmpty()) {
+                item { EmptyHint("No materials yet. Tap + to add some, or import supplier invoices.") }
+            } else {
+                item {
+                    Text(
+                        "Total ${money(total)} kr on ${rows.size} job" + if (rows.size == 1) "" else "s",
+                        Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
-        }
-        if (items.isEmpty()) {
-            Text("No materials logged yet.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        LazyColumn(
-            Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(top = if (needJob > 0) 76.dp else 0.dp, bottom = 88.dp),
-        ) {
-            items(items, key = { it.id }) { m -> MaterialRow(m, names, showDate = true) { dialog = m } }
+            if (unassigned.isNotEmpty()) {
+                item {
+                    ListItem(
+                        headlineContent = { Text("No job assigned", color = MaterialTheme.colorScheme.error) },
+                        supportingContent = { Text("${unassigned.size} lines need a job") },
+                        trailingContent = { Text("${money(unassigned.sumOf { it.quantity * it.unitPrice })} kr") },
+                        modifier = Modifier.clickable { onOpenMaterials(NO_JOB) },
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+            }
+            items(rows, key = { it.id }) { j ->
+                val lines = byJob[j.id]!!
+                ListItem(
+                    headlineContent = { Text(jobLabel(j, custNames)) },
+                    supportingContent = { Text("${lines.size} lines · last ${lines.maxOf { it.date }}") },
+                    trailingContent = { Text("${money(lines.sumOf { it.quantity * it.unitPrice })} kr") },
+                    modifier = Modifier.clickable { onOpenMaterials(j.id) },
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
         }
         FloatingActionButton(
             onClick = { dialog = "new" },
@@ -706,8 +741,82 @@ fun MaterialsScreen(vm: MainVm) {
         ) { Icon(Icons.Default.Add, "Add material") }
     }
 
+    if (dialog == "new") {
+        MaterialDialog(vm, null, today, { vm.save(it); dialog = null }, null) { dialog = null }
+    }
+}
+
+/** Material lines for one job (or the unassigned ones), grouped under each date. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun JobMaterialsScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
+    val materials by vm.allMaterials.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState(emptyList())
+    val customers by vm.customers.collectAsState(emptyList())
+    val names = rememberNames(vm)
+    var dialog by remember { mutableStateOf<Any?>(null) }
+    val today = LocalDate.now().toString()
+
+    val custNames = customers.associate { it.id to it.name }
+    val unassigned = jobId == NO_JOB
+    val job = jobs.find { it.id == jobId }
+    val lines = materials.filter { if (unassigned) it.jobId.isBlank() else it.jobId == jobId }
+    val byDate = lines.groupBy { it.date }.toSortedMap(compareByDescending<String> { it })
+    val title = when {
+        unassigned -> "No job assigned"
+        job != null -> jobLabel(job, custNames)
+        else -> "Materials"
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title, maxLines = 1) },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { dialog = "new" }) { Icon(Icons.Default.Add, "Add material") }
+        },
+    ) { padding ->
+        LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+            item {
+                Text(
+                    "Total ${money(lines.sumOf { it.quantity * it.unitPrice })} kr · ${lines.size} lines",
+                    Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            if (unassigned) {
+                item {
+                    Text(
+                        "Tap a line and choose a job to move it.",
+                        Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (lines.isEmpty()) item { EmptyHint("No materials.") }
+            byDate.forEach { (date, dayLines) ->
+                item(key = "h-$date") {
+                    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)) {
+                        Text(date, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f))
+                        Text("${money(dayLines.sumOf { it.quantity * it.unitPrice })} kr",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+                items(dayLines, key = { it.id }) { m ->
+                    MaterialRow(m, names, showDate = false, showJob = unassigned) { dialog = m }
+                }
+            }
+        }
+    }
+
     when (val d = dialog) {
-        "new" -> MaterialDialog(vm, null, today, { vm.save(it); dialog = null }, null) { dialog = null }
+        "new" -> MaterialDialog(vm, null, today, { vm.save(it); dialog = null }, null,
+            defaultJobId = if (unassigned) "" else jobId) { dialog = null }
         is Material -> MaterialDialog(vm, d, today, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
         else -> Unit
     }
@@ -773,7 +882,7 @@ fun JobsScreen(vm: MainVm, onOpenJob: (String) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
+fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMaterials: (String) -> Unit) {
     val context = LocalContext.current
     val jobs: List<Job>? by vm.jobs.collectAsState(initial = null)
     val customers by vm.customers.collectAsState(emptyList())
@@ -875,8 +984,15 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
             if (trips.isEmpty()) EmptyHint("No trips.")
 
             SectionHeader("Materials", "${money(cost)} kr") { dialog = "newMat" }
-            materials.forEach { m -> MaterialRow(m, names, showDate = true, showJob = false) { dialog = m } }
-            if (materials.isEmpty()) EmptyHint("No materials.")
+            if (materials.isEmpty()) {
+                EmptyHint("No materials.")
+            } else {
+                ListItem(
+                    headlineContent = { Text("${materials.size} lines, ${money(cost)} kr") },
+                    supportingContent = { Text("Tap to see them by date") },
+                    modifier = Modifier.clickable { onOpenMaterials(jobId) },
+                )
+            }
 
             SectionHeader("To-do", "${todos.count { !it.done }} open") { dialog = "newTodo" }
             todos.forEach { t -> TodoRow(t, names, now, showJob = false, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
