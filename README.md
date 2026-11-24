@@ -4,10 +4,10 @@ Android app for an electrician's daily record keeping: calendar, driving (manual
 
 ## What's in it
 
-- **Home**: first screen. Today's hours, trips and materials with a prompt if today isn't logged, open and overdue to-dos, month totals, a warning for invoice lines needing a job, and a pinned notes card (saved on the phone only). Settings and Materials open from here.
+- **Home**: first screen. Today's hours, trips and materials with a prompt if today isn't logged, open and overdue to-dos, month totals, a warning for invoice lines needing a job, and a pinned notes card (saved on the phone only). To-do, Materials and Settings open from here.
 - **To-do**: list with checkboxes, optional job, and an optional reminder date and time that triggers a notification (scheduled with WorkManager, so it can be a few minutes late in battery saving mode). Done items are tucked away. To-dos sync to the server.
 - **Jobs**: every job has a unique number (plain counter, starting at 1001) and belongs to a customer. A customer can have many jobs. Jobs have Ongoing/Finished lists with hours and material cost; finished jobs disappear from the job dropdowns. Create jobs from the Jobs tab or with "+ New job" in any dropdown. If two phones create the same number, the server renumbers the later one.
-- **Customers**: name, contact person, phone, email, address, org/ID number, property designation (for ROT), notes. Ongoing/Finished tabs; finishing a customer hides it from the dropdowns. Shows total hours per customer.
+- **Customers** (own tab, Ongoing/Finished): name, contact person, phone, email, address, org/ID number, property designation (for ROT), notes. Ongoing/Finished tabs; finishing a customer hides it from the dropdowns. Shows total hours per customer.
 - **Work hours**: per day, per job (dropdown, with "+ New job" inline). Trips and materials are tied to a job the same way.
 - **Calendar**: month view, dots for work/driving/materials per day, red day number for past weekdays with no work logged, month totals. Tap a day to add or edit entries.
 - **Drive**: GPS trip recorder (foreground service, sums distance, saves a trip on stop) plus manual trips. Tap a trip to edit.

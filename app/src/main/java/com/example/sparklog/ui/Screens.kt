@@ -32,7 +32,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
@@ -98,9 +98,9 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewModel()) {
-    var tab by rememberSaveable { mutableIntStateOf(if (initialTab == "todo") 3 else 0) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     var day by rememberSaveable { mutableStateOf(initialDay?.toString()) }
-    var sub by rememberSaveable { mutableStateOf<String?>(null) } // "materials" or "settings"
+    var sub by rememberSaveable { mutableStateOf<String?>(if (initialTab == "todo") "todo" else null) } // "materials", "todo" or "settings"
 
     val selected = day
     if (selected != null) {
@@ -114,13 +114,17 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(if (subScreen == "materials") "Materials" else "Settings") },
+                    title = { Text(when (subScreen) { "materials" -> "Materials"; "todo" -> "To-do"; else -> "Settings" }) },
                     navigationIcon = { IconButton(onClick = { sub = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 )
             },
         ) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
-                if (subScreen == "materials") MaterialsScreen(vm) else SettingsScreen(vm)
+                when (subScreen) {
+                    "materials" -> MaterialsScreen(vm)
+                    "todo" -> TodoScreen(vm)
+                    else -> SettingsScreen(vm)
+                }
             }
         }
         return
@@ -133,7 +137,7 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
                     "Home" to Icons.Default.Home,
                     "Calendar" to Icons.Default.CalendarMonth,
                     "Drive" to Icons.Default.DirectionsCar,
-                    "To-do" to Icons.Default.Checklist,
+                    "Customers" to Icons.Default.People,
                     "Jobs" to Icons.Default.Work,
                 )
                 items.forEachIndexed { i, (label, icon) ->
@@ -152,7 +156,7 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
                 0 -> HomeScreen(vm, onOpenDay = { day = it.toString() }, onGoTab = { tab = it }, onOpenSub = { sub = it })
                 1 -> CalendarScreen(vm, onOpenDay = { day = it.toString() })
                 2 -> DriveScreen(vm)
-                3 -> TodoScreen(vm)
+                3 -> CustomersScreen(vm)
                 else -> JobsScreen(vm)
             }
         }
@@ -227,7 +231,7 @@ fun HomeScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit, onGoTab: (Int) -> Uni
                         Text("• ${t.title}" + (due?.let { " ($it)" } ?: ""), modifier = Modifier.padding(top = 2.dp))
                     }
                 }
-                OutlinedButton(onClick = { onGoTab(3) }, modifier = Modifier.padding(top = 8.dp)) { Text("Open to-do list") }
+                OutlinedButton(onClick = { onOpenSub("todo") }, modifier = Modifier.padding(top = 8.dp)) { Text("Open to-do list") }
             }
         }
 
@@ -262,9 +266,8 @@ fun HomeScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit, onGoTab: (Int) -> Uni
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onGoTab(2) }, modifier = Modifier.weight(1f)) { Text("Drive") }
+            OutlinedButton(onClick = { onOpenSub("todo") }, modifier = Modifier.weight(1f)) { Text("To-do") }
             OutlinedButton(onClick = { onOpenSub("materials") }, modifier = Modifier.weight(1f)) { Text("Materials") }
-            OutlinedButton(onClick = { onGoTab(4) }, modifier = Modifier.weight(1f)) { Text("Jobs") }
         }
     }
 
@@ -670,7 +673,7 @@ fun MaterialsScreen(vm: MainVm) {
     }
 }
 
-// ---------------------------------------------------------------- jobs and customers
+// ---------------------------------------------------------------- jobs
 
 @Composable
 fun JobsScreen(vm: MainVm) {
@@ -678,13 +681,12 @@ fun JobsScreen(vm: MainVm) {
     val customers by vm.customers.collectAsState(emptyList())
     val work by vm.allWork.collectAsState(emptyList())
     val materials by vm.allMaterials.collectAsState(emptyList())
-    var tab by rememberSaveable { mutableIntStateOf(0) } // 0 ongoing, 1 finished, 2 customers
+    var tab by rememberSaveable { mutableIntStateOf(0) } // 0 ongoing, 1 finished
     var dialog by remember { mutableStateOf<Any?>(null) }
 
     val custNames = customers.associate { it.id to it.name }
     val hoursByJob = work.groupBy { it.jobId }.mapValues { (_, v) -> v.sumOf { it.hours } }
     val costByJob = materials.groupBy { it.jobId }.mapValues { (_, v) -> v.sumOf { it.quantity * it.unitPrice } }
-    val hoursByCustomer = work.groupBy { it.customerId }.mapValues { (_, v) -> v.sumOf { it.hours } }
     val ongoing = jobs.filter { !it.finished }
     val finished = jobs.filter { it.finished }
 
@@ -693,65 +695,98 @@ fun JobsScreen(vm: MainVm) {
             TabRow(selectedTabIndex = tab) {
                 Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Ongoing (${ongoing.size})") })
                 Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Finished (${finished.size})") })
-                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Customers") })
             }
-
-            if (tab < 2) {
-                val shown = if (tab == 0) ongoing else finished
-                if (shown.isEmpty()) {
-                    Text(
-                        if (tab == 1) "No finished jobs." else "No ongoing jobs. Tap + to add one.",
-                        Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
+            val shown = if (tab == 0) ongoing else finished
+            if (shown.isEmpty()) {
+                Text(
+                    if (tab == 1) "No finished jobs." else "No ongoing jobs. Tap + to add one.",
+                    Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+                items(shown, key = { it.id }) { j ->
+                    val cost = costByJob[j.id] ?: 0.0
+                    ListItem(
+                        headlineContent = { Text(jobLabel(j, custNames)) },
+                        supportingContent = { if (cost > 0) Text("Materials: ${money(cost)} kr") },
+                        trailingContent = { Text("${fmt(hoursByJob[j.id] ?: 0.0)} h") },
+                        modifier = Modifier.clickable { dialog = j },
                     )
-                }
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
-                    items(shown, key = { it.id }) { j ->
-                        val cost = costByJob[j.id] ?: 0.0
-                        ListItem(
-                            headlineContent = { Text(jobLabel(j, custNames)) },
-                            supportingContent = { if (cost > 0) Text("Materials: ${money(cost)} kr") },
-                            trailingContent = { Text("${fmt(hoursByJob[j.id] ?: 0.0)} h") },
-                            modifier = Modifier.clickable { dialog = j },
-                        )
-                        HorizontalDivider()
-                    }
-                }
-            } else {
-                if (customers.isEmpty()) {
-                    Text("No customers yet. Tap + to add one.", Modifier.padding(16.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
-                    items(customers, key = { it.id }) { c ->
-                        val place = listOf(c.address, listOf(c.postalCode, c.city).filter { it.isNotBlank() }.joinToString(" "))
-                            .filter { it.isNotBlank() }.joinToString(", ")
-                        ListItem(
-                            headlineContent = { Text(c.name + if (c.finished) " (finished)" else "") },
-                            supportingContent = {
-                                Column {
-                                    if (place.isNotBlank()) Text(place)
-                                    val contact = listOf(c.contactPerson, c.phone).filter { it.isNotBlank() }.joinToString(" · ")
-                                    if (contact.isNotBlank()) Text(contact)
-                                }
-                            },
-                            trailingContent = { Text("${fmt(hoursByCustomer[c.id] ?: 0.0)} h") },
-                            modifier = Modifier.clickable { dialog = c },
-                        )
-                        HorizontalDivider()
-                    }
+                    HorizontalDivider()
                 }
             }
         }
         FloatingActionButton(
-            onClick = { dialog = if (tab == 2) "newCustomer" else "newJob" },
+            onClick = { dialog = "newJob" },
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-        ) { Icon(Icons.Default.Add, if (tab == 2) "Add customer" else "Add job") }
+        ) { Icon(Icons.Default.Add, "Add job") }
     }
 
     when (val d = dialog) {
         "newJob" -> JobDialog(vm, null, { vm.save(it); dialog = null }, null) { dialog = null }
         is Job -> JobDialog(vm, d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
-        "newCustomer" -> CustomerDialog(null, { vm.save(it); dialog = null }, null) { dialog = null }
+        else -> Unit
+    }
+}
+
+// ---------------------------------------------------------------- customers
+
+@Composable
+fun CustomersScreen(vm: MainVm) {
+    val customers by vm.customers.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState(emptyList())
+    val work by vm.allWork.collectAsState(emptyList())
+    var showFinished by rememberSaveable { mutableStateOf(false) }
+    var dialog by remember { mutableStateOf<Any?>(null) }
+
+    val hoursBy = work.groupBy { it.customerId }.mapValues { (_, v) -> v.sumOf { it.hours } }
+    val ongoingJobsBy = jobs.filter { !it.finished }.groupBy { it.customerId }.mapValues { it.value.size }
+    val shown = customers.filter { it.finished == showFinished }
+    val ongoingCount = customers.count { !it.finished }
+    val finishedCount = customers.size - ongoingCount
+
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            TabRow(selectedTabIndex = if (showFinished) 1 else 0) {
+                Tab(selected = !showFinished, onClick = { showFinished = false }, text = { Text("Ongoing ($ongoingCount)") })
+                Tab(selected = showFinished, onClick = { showFinished = true }, text = { Text("Finished ($finishedCount)") })
+            }
+            if (shown.isEmpty()) {
+                Text(
+                    if (showFinished) "No finished customers." else "No ongoing customers. Tap + to add one.",
+                    Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
+                items(shown, key = { it.id }) { c ->
+                    val place = listOf(c.address, listOf(c.postalCode, c.city).filter { it.isNotBlank() }.joinToString(" "))
+                        .filter { it.isNotBlank() }.joinToString(", ")
+                    val openJobs = ongoingJobsBy[c.id] ?: 0
+                    ListItem(
+                        headlineContent = { Text(c.name) },
+                        supportingContent = {
+                            Column {
+                                if (place.isNotBlank()) Text(place)
+                                val contact = listOf(c.contactPerson, c.phone).filter { it.isNotBlank() }.joinToString(" · ")
+                                if (contact.isNotBlank()) Text(contact)
+                                if (openJobs > 0) Text("$openJobs ongoing job" + if (openJobs > 1) "s" else "")
+                            }
+                        },
+                        trailingContent = { Text("${fmt(hoursBy[c.id] ?: 0.0)} h") },
+                        modifier = Modifier.clickable { dialog = c },
+                    )
+                    HorizontalDivider()
+                }
+            }
+        }
+        FloatingActionButton(
+            onClick = { dialog = "new" },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        ) { Icon(Icons.Default.Add, "Add customer") }
+    }
+
+    when (val d = dialog) {
+        "new" -> CustomerDialog(null, { vm.save(it); dialog = null }, null) { dialog = null }
         is Customer -> CustomerDialog(d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
         else -> Unit
     }
