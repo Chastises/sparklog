@@ -1184,7 +1184,10 @@ fun CustomersScreen(vm: MainVm) {
 
     when (val d = dialog) {
         "new" -> CustomerDialog(null, { vm.save(it); dialog = null }, null) { dialog = null }
-        is Customer -> CustomerDialog(d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
+        is Customer -> CustomerDialog(
+            d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }, { dialog = null },
+            ongoingJobs = jobs.count { it.customerId == d.id && !it.finished },
+        )
         else -> Unit
     }
 }

@@ -157,6 +157,7 @@ fun CustomerDialog(
     onSave: (Customer) -> Unit,
     onDelete: (() -> Unit)?,
     onDismiss: () -> Unit,
+    ongoingJobs: Int = 0,
 ) {
     var name by remember { mutableStateOf(initial?.name ?: "") }
     var contact by remember { mutableStateOf(initial?.contactPerson ?: "") }
@@ -200,9 +201,13 @@ fun CustomerDialog(
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Finished")
-                Text("Hidden from the customer dropdown", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Text(
+                    if (ongoingJobs > 0) "Can't be finished: $ongoingJobs ongoing job" + (if (ongoingJobs == 1) "" else "s") + ". Finish the job" + (if (ongoingJobs == 1) "" else "s") + " first."
+                    else "Hidden from the customer dropdown",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
             }
-            Switch(checked = finished, onCheckedChange = { finished = it })
+            Switch(checked = finished, enabled = ongoingJobs == 0 || finished, onCheckedChange = { finished = it })
         }
     }
 }
