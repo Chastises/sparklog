@@ -32,7 +32,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
@@ -98,9 +98,10 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewModel()) {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableIntStateOf(if (initialTab == "todo") 3 else 0) }
+    var jobsSection by rememberSaveable { mutableIntStateOf(0) } // 0 jobs, 1 customers, 2 drive, 3 materials
     var day by rememberSaveable { mutableStateOf(initialDay?.toString()) }
-    var sub by rememberSaveable { mutableStateOf<String?>(if (initialTab == "todo") "todo" else null) } // "materials", "todo" or "settings"
+    var sub by rememberSaveable { mutableStateOf<String?>(null) } // only "settings"
 
     val selected = day
     if (selected != null) {
@@ -114,17 +115,13 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(when (subScreen) { "materials" -> "Materials"; "todo" -> "To-do"; else -> "Settings" }) },
+                    title = { Text("Settings") },
                     navigationIcon = { IconButton(onClick = { sub = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 )
             },
         ) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
-                when (subScreen) {
-                    "materials" -> MaterialsScreen(vm)
-                    "todo" -> TodoScreen(vm)
-                    else -> SettingsScreen(vm)
-                }
+                SettingsScreen(vm)
             }
         }
         return
@@ -136,9 +133,8 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
                 val items = listOf(
                     "Home" to Icons.Default.Home,
                     "Calendar" to Icons.Default.CalendarMonth,
-                    "Drive" to Icons.Default.DirectionsCar,
-                    "Customers" to Icons.Default.People,
                     "Jobs" to Icons.Default.Work,
+                    "To-do" to Icons.Default.Checklist,
                 )
                 items.forEachIndexed { i, (label, icon) ->
                     NavigationBarItem(
@@ -153,11 +149,39 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (tab) {
-                0 -> HomeScreen(vm, onOpenDay = { day = it.toString() }, onGoTab = { tab = it }, onOpenSub = { sub = it })
+                0 -> HomeScreen(
+                    vm,
+                    onOpenDay = { day = it.toString() },
+                    onGoTab = { tab = it },
+                    onOpenSub = { sub = it },
+                    onOpenJobs = { section -> jobsSection = section; tab = 2 },
+                )
                 1 -> CalendarScreen(vm, onOpenDay = { day = it.toString() })
+                2 -> JobsHub(vm, jobsSection) { jobsSection = it }
+                else -> TodoScreen(vm)
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- jobs hub
+
+/** Everything that hangs off a job lives here: jobs, customers, driving and materials. */
+@Composable
+fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit) {
+    val titles = listOf("Jobs", "Customers", "Drive", "Materials")
+    Column(Modifier.fillMaxSize()) {
+        TabRow(selectedTabIndex = section) {
+            titles.forEachIndexed { i, title ->
+                Tab(selected = section == i, onClick = { onSection(i) }, text = { Text(title) })
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            when (section) {
+                0 -> JobsScreen(vm)
+                1 -> CustomersScreen(vm)
                 2 -> DriveScreen(vm)
-                3 -> CustomersScreen(vm)
-                else -> JobsScreen(vm)
+                else -> MaterialsScreen(vm)
             }
         }
     }
@@ -166,7 +190,13 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
 // ---------------------------------------------------------------- home
 
 @Composable
-fun HomeScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit, onGoTab: (Int) -> Unit, onOpenSub: (String) -> Unit) {
+fun HomeScreen(
+    vm: MainVm,
+    onOpenDay: (LocalDate) -> Unit,
+    onGoTab: (Int) -> Unit,
+    onOpenSub: (String) -> Unit,
+    onOpenJobs: (Int) -> Unit,
+) {
     val today = LocalDate.now()
     val ds = today.toString()
     val ym = YearMonth.from(today)
@@ -231,7 +261,7 @@ fun HomeScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit, onGoTab: (Int) -> Uni
                         Text("• ${t.title}" + (due?.let { " ($it)" } ?: ""), modifier = Modifier.padding(top = 2.dp))
                     }
                 }
-                OutlinedButton(onClick = { onOpenSub("todo") }, modifier = Modifier.padding(top = 8.dp)) { Text("Open to-do list") }
+                OutlinedButton(onClick = { onGoTab(3) }, modifier = Modifier.padding(top = 8.dp)) { Text("Open to-do list") }
             }
         }
 
@@ -243,7 +273,7 @@ fun HomeScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit, onGoTab: (Int) -> Uni
                 if (needJob > 0) {
                     Text("$needJob imported invoice lines need a job", color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 4.dp))
-                    OutlinedButton(onClick = { onOpenSub("materials") }, modifier = Modifier.padding(top = 8.dp)) {
+                    OutlinedButton(onClick = { onOpenJobs(3) }, modifier = Modifier.padding(top = 8.dp)) {
                         Text("Open materials")
                     }
                 }
@@ -266,8 +296,9 @@ fun HomeScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit, onGoTab: (Int) -> Uni
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onOpenSub("todo") }, modifier = Modifier.weight(1f)) { Text("To-do") }
-            OutlinedButton(onClick = { onOpenSub("materials") }, modifier = Modifier.weight(1f)) { Text("Materials") }
+            OutlinedButton(onClick = { onOpenJobs(2) }, modifier = Modifier.weight(1f)) { Text("Drive") }
+            OutlinedButton(onClick = { onOpenJobs(3) }, modifier = Modifier.weight(1f)) { Text("Materials") }
+            OutlinedButton(onClick = { onOpenJobs(1) }, modifier = Modifier.weight(1f)) { Text("Customers") }
         }
     }
 
