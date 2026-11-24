@@ -80,6 +80,8 @@ data class Material(
     val supplier: String = "",
     val invoiceRef: String = "",
     val source: String = "manual", // "manual" or "invoice" (imported from email)
+    /** Markup in percent for this line only; negative = use the job's markup. */
+    val markupPercent: Double = -1.0,
     val updatedAt: Long = System.currentTimeMillis(),
     val deleted: Boolean = false,
 )

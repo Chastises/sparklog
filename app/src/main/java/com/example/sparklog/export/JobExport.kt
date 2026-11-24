@@ -30,12 +30,17 @@ data class JobExportData(
     fun lineTotal(m: Material) = Markup.lineTotal(m, markupPercent)
 }
 
-/** Markup maths shared by the screens and the exports. Rounded to whole öre per unit. */
+/**
+ * Markup maths shared by the screens and the exports. A line's own markup (if set) wins over
+ * the job's. Unit prices are rounded to whole öre before multiplying by the quantity.
+ */
 object Markup {
     private fun round2(d: Double) = Math.round(d * 100.0) / 100.0
-    fun unitPrice(m: Material, pct: Double) = round2(m.unitPrice * (1.0 + pct / 100.0))
-    fun lineTotal(m: Material, pct: Double) = round2(m.quantity * unitPrice(m, pct))
+    fun effective(m: Material, jobPct: Double) = if (m.markupPercent >= 0) m.markupPercent else jobPct
+    fun unitPrice(m: Material, jobPct: Double) = round2(m.unitPrice * (1.0 + effective(m, jobPct) / 100.0))
+    fun lineTotal(m: Material, jobPct: Double) = round2(m.quantity * unitPrice(m, jobPct))
     fun cost(m: Material) = round2(m.quantity * m.unitPrice)
+    fun profit(m: Material, jobPct: Double) = round2(lineTotal(m, jobPct) - cost(m))
 }
 
 object JobExport {

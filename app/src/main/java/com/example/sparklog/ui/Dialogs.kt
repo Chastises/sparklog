@@ -396,15 +396,19 @@ fun MaterialDialog(
     var unit by remember { mutableStateOf(initial?.unit ?: "pcs") }
     var price by remember { mutableStateOf(initial?.takeIf { it.unitPrice > 0 }?.let { fmt(it.unitPrice) } ?: "") }
     var supplier by remember { mutableStateOf(initial?.supplier ?: "") }
+    var markup by remember { mutableStateOf(initial?.markupPercent?.takeIf { it >= 0 }?.let { fmt(it) } ?: "") }
+    val markupOk = markup.isBlank() || (markup.toNum()?.let { it >= 0 } == true)
+    val job = jobs.find { it.id == jobId }
+    val jobPct = if (job != null && job.markupPercent >= 0) job.markupPercent else vm.prefs.defaultMarkup.toDouble()
     FormDialog(
         title = if (initial == null) "Add material" else "Edit material",
-        canSave = validDate(date) && name.isNotBlank() && qty.toNum() != null && (price.isBlank() || price.toNum() != null),
+        canSave = validDate(date) && name.isNotBlank() && qty.toNum() != null && (price.isBlank() || price.toNum() != null) && markupOk,
         onSave = {
             val base = initial ?: Material(date = date.trim(), name = name.trim())
             val customer = jobs.find { it.id == jobId }?.customerId ?: base.customerId
             onSave(base.copy(date = date.trim(), jobId = jobId, customerId = customer, name = name.trim(),
                 quantity = qty.toNum() ?: 1.0, unit = unit.trim(), unitPrice = price.toNum() ?: 0.0,
-                supplier = supplier.trim()))
+                supplier = supplier.trim(), markupPercent = markup.toNum()?.takeIf { it >= 0 } ?: -1.0))
         },
         onDelete = onDelete,
         onDismiss = onDismiss,
@@ -422,6 +426,20 @@ fun MaterialDialog(
         Field("Unit (pcs, m, box...)", unit, { unit = it })
         Field("Price per unit (ex VAT)", price, { price = it }, number = true, isError = price.isNotBlank() && price.toNum() == null)
         Field("Supplier", supplier, { supplier = it })
+        Field(
+            "Markup % (blank = job's ${fmt(jobPct)}%)",
+            markup, { markup = it }, number = true, isError = !markupOk,
+        )
+        val unitCost = price.toNum()
+        if (unitCost != null && unitCost > 0 && markupOk) {
+            val pct = markup.toNum()?.takeIf { it >= 0 } ?: jobPct
+            val customerUnit = Math.round(unitCost * (1.0 + pct / 100.0) * 100.0) / 100.0
+            Text(
+                "Customer price per unit: ${"%.2f".format(customerUnit)} kr",
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 

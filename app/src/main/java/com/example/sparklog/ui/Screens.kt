@@ -752,6 +752,23 @@ fun MaterialsScreen(vm: MainVm, onOpenMaterials: (String) -> Unit) {
     }
 }
 
+/** One material line with cost, customer price and the markup in effect. Internal screens only. */
+@Composable
+private fun CostedMaterialRow(m: Material, jobPct: Double, onClick: () -> Unit) {
+    val eff = Markup.effective(m, jobPct)
+    val details = listOfNotNull(
+        m.supplier.ifBlank { null },
+        if (m.unitPrice > 0) "cost ${money(Markup.cost(m))} kr" else null,
+        if (m.unitPrice > 0) "+${fmt(eff)}%" + if (m.markupPercent >= 0) " (set on this line)" else "" else null,
+    ).joinToString(" · ")
+    ListItem(
+        headlineContent = { Text("${m.name} · ${fmt(m.quantity)} ${m.unit}") },
+        supportingContent = { if (details.isNotBlank()) Text(details) },
+        trailingContent = { if (m.unitPrice > 0) Text("${money(Markup.lineTotal(m, jobPct))} kr") },
+        modifier = Modifier.clickable(onClick = onClick),
+    )
+}
+
 /** Material lines for one job (or the unassigned ones), grouped under each date. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -816,13 +833,22 @@ fun JobMaterialsScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
                     Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)) {
                         Text(date, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.weight(1f))
-                        Text("${money(dayLines.sumOf { it.quantity * it.unitPrice })} kr",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val dayPct = if (job != null && job.markupPercent >= 0) job.markupPercent else vm.prefs.defaultMarkup.toDouble()
+                        Text(
+                            if (unassigned) "${money(dayLines.sumOf { Markup.cost(it) })} kr"
+                            else "${money(dayLines.sumOf { Markup.cost(it) })} → ${money(dayLines.sumOf { Markup.lineTotal(it, dayPct) })} kr",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
                 items(dayLines, key = { it.id }) { m ->
-                    MaterialRow(m, names, showDate = false, showJob = unassigned) { dialog = m }
+                    if (unassigned) {
+                        MaterialRow(m, names, showDate = false, showJob = true) { dialog = m }
+                    } else {
+                        val pct = if (job != null && job.markupPercent >= 0) job.markupPercent else vm.prefs.defaultMarkup.toDouble()
+                        CostedMaterialRow(m, pct) { dialog = m }
+                    }
                 }
             }
         }
@@ -998,12 +1024,27 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                 }
             }
             if (materials.isNotEmpty()) {
-                Text(
-                    "Customer price ${money(customerPrice)} kr (${fmt(markupPct)}% markup, only you see this)",
-                    Modifier.padding(horizontal = 20.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                val profit = customerPrice - cost
+                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Materials (only you see this)", style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Stat("Cost", money(cost) + " kr")
+                            Stat("Customer price", money(customerPrice) + " kr")
+                            Stat("Profit", money(profit) + " kr")
+                        }
+                        if (customerPrice > 0) {
+                            Text(
+                                "Margin ${fmt(Math.round(profit / customerPrice * 1000.0) / 10.0)}% of the customer price. Job markup ${fmt(markupPct)}%.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp),
+                            )
+                        }
+                    }
+                }
             }
 
             OutlinedButton(

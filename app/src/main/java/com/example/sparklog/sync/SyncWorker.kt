@@ -199,6 +199,7 @@ private fun Material.toJson() = JSONObject()
     .put("id", id).put("date", date).put("jobId", jobId).put("customerId", customerId)
     .put("name", name).put("quantity", quantity).put("unit", unit).put("unitPrice", unitPrice)
     .put("supplier", supplier).put("invoiceRef", invoiceRef).put("source", source)
+    .put("markupPercent", markupPercent)
     .put("updatedAt", updatedAt).put("deleted", deleted)
 
 private fun JSONObject.toMaterial() = Material(
@@ -207,5 +208,6 @@ private fun JSONObject.toMaterial() = Material(
     quantity = optDouble("quantity", 1.0), unit = optString("unit", "pcs"),
     unitPrice = optDouble("unitPrice", 0.0), supplier = optString("supplier"),
     invoiceRef = optString("invoiceRef"), source = optString("source", "manual"),
+    markupPercent = optDouble("markupPercent", -1.0),
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )

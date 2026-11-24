@@ -100,6 +100,7 @@ def test_import_matches_job():
     rows = materials(db)
     assert len(rows) == 3
     assert all(r["jobId"] == "j1" and r["customerId"] == "c1" and r["source"] == "invoice" for r in rows)
+    assert all(r["markupPercent"] == -1.0 for r in rows)  # imported lines follow the job's markup
     assert all(r["invoiceRef"] == "8812345" and r["supplier"] == "Ahlsell" and r["date"] == "2026-11-20" for r in rows)
     cable = [r for r in rows if r["name"].startswith("Kabel")][0]
     assert cable["quantity"] == 2 and abs(cable["unitPrice"] - 1110.55) < 0.01

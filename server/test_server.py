@@ -108,6 +108,9 @@ def main():
         post({"since": 0, "materials": [m]})
         got = post({"since": 0})["materials"][0]
         assert got["unitPrice"] == 12.5 and got["source"] == "invoice" and got["jobId"] == "j1"
+        assert got["markupPercent"] == -1.0  # no per-line markup unless set
+        post({"since": 0, "materials": [dict(m, markupPercent=20.0, updatedAt=7100)]})
+        assert post({"since": 0})["materials"][0]["markupPercent"] == 20.0
 
         # todos: epoch-millis due time and done flag round-trip, completion syncs
         due = 1795600000000
