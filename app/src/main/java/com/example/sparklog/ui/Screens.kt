@@ -2,6 +2,8 @@ package com.example.sparklog.ui
 
 import android.Manifest
 import android.content.Intent
+import com.example.sparklog.export.JobExport
+import com.example.sparklog.export.JobExportData
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -36,6 +38,9 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
@@ -892,6 +897,7 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
     val allTodos by vm.todos.collectAsState(emptyList())
     val names = rememberNames(vm)
     var dialog by remember { mutableStateOf<Any?>(null) }
+    var shareMenu by remember { mutableStateOf(false) }
 
     val job = jobs?.find { it.id == jobId }
     if (jobs != null && job == null) { // deleted
@@ -913,7 +919,24 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
             TopAppBar(
                 title = { Text("Job #${job.number}") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                actions = { IconButton(onClick = { dialog = "editJob" }) { Icon(Icons.Default.Edit, "Edit job") } },
+                actions = {
+                    Box {
+                        IconButton(onClick = { shareMenu = true }) { Icon(Icons.Default.Share, "Share or export") }
+                        DropdownMenu(expanded = shareMenu, onDismissRequest = { shareMenu = false }) {
+                            DropdownMenuItem(text = { Text("Share job summary (PDF)") }, onClick = {
+                                shareMenu = false
+                                val data = JobExportData(job, customer, work, trips, materials)
+                                JobExport.share(context, JobExport.pdf(context, data), "application/pdf", "Job #${job.number}")
+                            })
+                            DropdownMenuItem(text = { Text("Share materials (CSV)") }, onClick = {
+                                shareMenu = false
+                                val data = JobExportData(job, customer, work, trips, materials)
+                                JobExport.share(context, JobExport.csv(context, data), "text/csv", "Job #${job.number} materials")
+                            })
+                        }
+                    }
+                    IconButton(onClick = { dialog = "editJob" }) { Icon(Icons.Default.Edit, "Edit job") }
+                },
             )
         },
     ) { padding ->
