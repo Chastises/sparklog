@@ -198,16 +198,17 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit, onOpenJob: (String) -> Unit, onOpenMaterials: (String) -> Unit) {
-    val titles = listOf("Jobs", "Customers", "Drive", "Materials")
+    val titles = listOf("Jobs", "Customers", "Drive", "Materials") // indexed by section id
+    val order = listOf(0, 3, 2, 1) // order shown: Jobs, Materials, Drive, Customers
     Column(Modifier.fillMaxSize()) {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-            titles.forEachIndexed { i, title ->
+            order.forEachIndexed { pos, id ->
                 SegmentedButton(
-                    selected = section == i,
-                    onClick = { onSection(i) },
-                    shape = SegmentedButtonDefaults.itemShape(index = i, count = titles.size),
+                    selected = section == id,
+                    onClick = { onSection(id) },
+                    shape = SegmentedButtonDefaults.itemShape(index = pos, count = order.size),
                     icon = {},
-                ) { Text(title, maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
+                ) { Text(titles[id], maxLines = 1, softWrap = false, style = MaterialTheme.typography.labelSmall) }
             }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
