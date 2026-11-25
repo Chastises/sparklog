@@ -1101,6 +1101,27 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
                         Text("Reference: ${job.reference}", style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                    val serverOn = vm.prefs.serverUrl.isNotBlank()
+                    val (numText, numOk) = when {
+                        job.number <= 0 -> "Waiting for the server to assign a number. Don't use it with a supplier yet." to false
+                        serverOn -> "\u2713 Number confirmed by server" to true
+                        else -> "Local number (no server set up)" to false
+                    }
+                    Text(
+                        numText,
+                        color = if (numOk) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    if (job.number <= 0 && serverOn) {
+                        val scope = rememberCoroutineScope()
+                        var busy by remember { mutableStateOf(false) }
+                        var err by remember { mutableStateOf<String?>(null) }
+                        TextButton(enabled = !busy, onClick = {
+                            busy = true
+                            scope.launch { err = vm.syncNow(); busy = false }
+                        }) { Text(if (busy) "Syncing\u2026" else "Sync now") }
+                        err?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                    }
                     Text(
                         if (job.finished) "Finished" else "Ongoing",
                         color = if (job.finished) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
