@@ -408,17 +408,32 @@ fun TodoScreen(vm: MainVm) {
     var showDone by rememberSaveable { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<Any?>(null) }
     val now = System.currentTimeMillis()
+    val today = LocalDate.now()
 
     val open = todos.filter { !it.done }
         .sortedWith(compareBy({ if (it.dueAt > 0) 0 else 1 }, { it.dueAt }, { it.title.lowercase() }))
     val done = todos.filter { it.done }.sortedByDescending { it.updatedAt }
 
+    fun dateOf(t: Todo) = dueToDateTime(t.dueAt)?.toLocalDate()
+    val overdue = open.filter { t -> dateOf(t)?.isBefore(today) == true }
+    val todayList = open.filter { t -> dateOf(t) == today }
+    val upcoming = open.filter { t -> dateOf(t)?.isAfter(today) == true }
+    val undated = open.filter { dateOf(it) == null }
+
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 88.dp)) {
-            items(open, key = { it.id }) { t -> TodoRow(t, names, now, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = 96.dp)) {
+            fun section(title: String, list: List<Todo>, color: Color = Color.Unspecified) {
+                if (list.isEmpty()) return
+                item(key = "h-$title") { TodoHeader(title, list.size, color) }
+                items(list, key = { it.id }) { t -> TodoRow(t, names, now, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
+            }
+            section("Overdue", overdue, MaterialTheme.colorScheme.error)
+            section("Today", todayList)
+            section("Upcoming", upcoming)
+            section("No date", undated)
             if (done.isNotEmpty()) {
                 item {
-                    TextButton(onClick = { showDone = !showDone }, modifier = Modifier.padding(start = 8.dp)) {
+                    TextButton(onClick = { showDone = !showDone }, modifier = Modifier.padding(start = 8.dp, top = 8.dp)) {
                         Text(if (showDone) "Hide done (${done.size})" else "Show done (${done.size})")
                     }
                 }
@@ -426,8 +441,13 @@ fun TodoScreen(vm: MainVm) {
             }
         }
         if (todos.isEmpty()) {
-            Text("No to-dos yet", Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 32.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(Modifier.align(Alignment.Center).padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Nothing to do", style = MaterialTheme.typography.titleMedium)
+                Text("Tap + to add a to-do.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        } else if (open.isEmpty()) {
+            Text("All done \u2713", Modifier.align(Alignment.TopCenter).padding(top = 24.dp),
+                style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         }
         FloatingActionButton(
             onClick = { dialog = "new" },
@@ -443,27 +463,48 @@ fun TodoScreen(vm: MainVm) {
 }
 
 @Composable
+private fun TodoHeader(title: String, count: Int, color: Color) {
+    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = MaterialTheme.typography.titleSmall,
+            color = if (color == Color.Unspecified) MaterialTheme.colorScheme.primary else color,
+            modifier = Modifier.weight(1f))
+        Text(count.toString(), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun TodoRow(t: Todo, names: Map<String, String>, now: Long, showJob: Boolean = true, onToggle: () -> Unit, onClick: () -> Unit) {
     val due = dueToDateTime(t.dueAt)?.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM HH:mm", Locale.ENGLISH))
     val overdue = !t.done && t.dueAt in 1 until now
     val job = if (showJob && t.jobId.isNotBlank()) customerLabel(names, t.jobId, "") else ""
-    ListItem(
-        leadingContent = { Checkbox(checked = t.done, onCheckedChange = { onToggle() }) },
-        headlineContent = {
-            Text(t.title, textDecoration = if (t.done) TextDecoration.LineThrough else null)
-        },
-        supportingContent = {
-            Column {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = if (overdue) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (t.done) 0.3f else 0.6f),
+        ),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = t.done, onCheckedChange = { onToggle() })
+            Column(Modifier.weight(1f).padding(vertical = 4.dp)) {
+                Text(
+                    t.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (t.done) muted else MaterialTheme.colorScheme.onSurface,
+                    textDecoration = if (t.done) TextDecoration.LineThrough else null,
+                )
                 if (due != null) {
-                    Text(due, color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(due, style = MaterialTheme.typography.labelLarge,
+                        color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                 }
-                if (job.isNotBlank()) Text(job)
-                if (t.notes.isNotBlank()) Text(t.notes)
+                if (job.isNotBlank()) Text(job, style = MaterialTheme.typography.bodySmall, color = muted)
+                if (t.notes.isNotBlank()) Text(t.notes, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 2)
             }
-        },
-        modifier = Modifier.clickable(onClick = onClick),
-    )
-    HorizontalDivider()
+        }
+    }
 }
 
 // ---------------------------------------------------------------- calendar
