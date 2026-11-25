@@ -111,7 +111,7 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
     var day by rememberSaveable { mutableStateOf(initialDay?.toString()) }
     var openJob by rememberSaveable { mutableStateOf<String?>(null) }
     var materialsJob by rememberSaveable { mutableStateOf<String?>(null) } // job id or NO_JOB
-    var sub by rememberSaveable { mutableStateOf<String?>(null) } // only "settings"
+    var sub by rememberSaveable { mutableStateOf<String?>(null) } // "settings" or "admin"
 
     val selected = day
     if (selected != null) {
@@ -133,17 +133,19 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
     }
     val subScreen = sub
     if (subScreen != null) {
-        BackHandler { sub = null }
+        val inAdmin = subScreen == "admin"
+        val back = { sub = if (inAdmin) "settings" else null }
+        BackHandler { back() }
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Settings") },
-                    navigationIcon = { IconButton(onClick = { sub = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
+                    title = { Text(if (inAdmin) "Admin" else "Settings") },
+                    navigationIcon = { IconButton(onClick = { back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 )
             },
         ) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
-                SettingsScreen(vm)
+                if (inAdmin) AdminScreen(vm) else SettingsScreen(vm, onOpenAdmin = { sub = "admin" })
             }
         }
         return
@@ -1334,13 +1336,10 @@ fun CustomersScreen(vm: MainVm) {
 // ---------------------------------------------------------------- settings
 
 @Composable
-fun SettingsScreen(vm: MainVm) {
+fun SettingsScreen(vm: MainVm, onOpenAdmin: () -> Unit) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val prefs = vm.prefs
 
-    var url by remember { mutableStateOf(prefs.serverUrl) }
-    var token by remember { mutableStateOf(prefs.token) }
     var hour by remember { mutableStateOf(prefs.reminderHour.toString()) }
     var minute by remember { mutableStateOf(prefs.reminderMinute.toString().padStart(2, '0')) }
     var markup by remember { mutableStateOf(fmt(prefs.defaultMarkup.toDouble())) }
@@ -1364,8 +1363,6 @@ fun SettingsScreen(vm: MainVm) {
         prefs.hourlyRate = newHourly
         prefs.ratePer10Km = newPer10
         prefs.calloutFee = newCallout
-        prefs.serverUrl = url.trim().trimEnd('/')
-        prefs.token = token.trim()
         val h = hour.toIntOrNull()?.coerceIn(0, 23) ?: prefs.reminderHour
         val m = minute.toIntOrNull()?.coerceIn(0, 59) ?: prefs.reminderMinute
         prefs.reminderHour = h
@@ -1413,29 +1410,14 @@ fun SettingsScreen(vm: MainVm) {
             )
         }
 
-        Spacer(Modifier.height(16.dp))
-        Text("Server sync", style = MaterialTheme.typography.titleMedium)
-        Text("Your own server, for example http://192.168.1.50:8787", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(url, { url = it }, label = { Text("Server URL") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
-        var showToken by remember { mutableStateOf(false) }
-        OutlinedTextField(
-            token, { token = it }, label = { Text("Token") }, singleLine = true,
-            visualTransformation = if (showToken) androidx.compose.ui.text.input.VisualTransformation.None
-                else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            trailingIcon = { TextButton(onClick = { showToken = !showToken }) { Text(if (showToken) "Hide" else "Show") } },
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        )
-
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
             Button(onClick = { saveAll(); status = "Saved" }) { Text("Save") }
-            OutlinedButton(onClick = {
-                saveAll()
-                status = "Syncing..."
-                scope.launch { status = vm.syncNow() ?: "Sync OK" }
-            }) { Text("Sync now") }
         }
         if (status.isNotEmpty()) Text(status, Modifier.padding(top = 8.dp))
+
+        Spacer(Modifier.height(24.dp))
+        Text("Admin", style = MaterialTheme.typography.titleMedium)
+        Text("Server connection, token and server updates.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(onClick = { saveAll(); onOpenAdmin() }, modifier = Modifier.padding(top = 8.dp)) { Text("Open Admin") }
     }
 }

@@ -14,6 +14,11 @@ class Prefs(context: Context) {
         get() = sp.getString("token", "") ?: ""
         set(v) = sp.edit().putString("token", v.trim()).apply()
 
+    /** SSH host key of the server, saved the first time the Admin update runs (trust on first use). */
+    var sshHostKey: String
+        get() = sp.getString("sshHostKey", "") ?: ""
+        set(v) = sp.edit().putString("sshHostKey", v).apply()
+
     /** Highest server timestamp we have pulled so far. */
     var lastPull: Long
         get() = sp.getLong("lastPull", 0L)
