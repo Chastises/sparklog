@@ -59,7 +59,15 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
     fun save(j: Job) {
         viewModelScope.launch {
             val isNew = j.number <= 0
-            val number = if (!isNew) j.number else maxOf(db.jobs().maxNumber() ?: 0, 1000) + 1
+            // With a server, only the server hands out job numbers (so two jobs can never get the same one):
+            // a new job is saved with number 0 = "pending" and gets its number on the first sync.
+            // Without a server, numbers are assigned here.
+            val useServer = prefs.serverUrl.isNotBlank() && prefs.token.isNotBlank()
+            val number = when {
+                !isNew -> j.number
+                useServer -> 0
+                else -> maxOf(db.jobs().maxNumber() ?: 0, 1000) + 1
+            }
             // A new job takes the current rates and keeps them, so later changes in Settings don't touch it.
             val fixed = if (!isNew) j else j.copy(
                 markupPercent = if (j.markupPercent >= 0) j.markupPercent else prefs.defaultMarkup.toDouble(),

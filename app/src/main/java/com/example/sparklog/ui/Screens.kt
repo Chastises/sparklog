@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
 import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
+import com.example.sparklog.data.jobNo
 import com.example.sparklog.data.Todo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -300,7 +301,7 @@ fun HomeScreen(
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text("Ongoing jobs", style = MaterialTheme.typography.titleMedium)
-                val ongoingJobs = jobs.filter { !it.finished }.sortedByDescending { it.number }
+                val ongoingJobs = jobs.filter { !it.finished }.sortedByDescending { if (it.number == 0) Int.MAX_VALUE else it.number }
                 if (ongoingJobs.isEmpty()) {
                     Text("No ongoing jobs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
@@ -320,7 +321,7 @@ fun HomeScreen(
                         Modifier.fillMaxWidth().clickable { onOpenJob(j.id) }.padding(vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("#${j.number} ${j.title.ifBlank { names[j.customerId].orEmpty() }}".trim(),
+                        Text("${jobNo(j.number)} ${j.title.ifBlank { names[j.customerId].orEmpty() }}".trim(),
                             Modifier.weight(1f), maxLines = 1)
                         Text("${money(d.totalExVat)} kr", style = MaterialTheme.typography.titleSmall)
                     }
@@ -728,7 +729,7 @@ fun DriveScreen(vm: MainVm) {
                         if (running) {
                             val j = allJobs.find { it.id == runningJob }
                             Text(
-                                if (j != null) "Recording to job #${j.number}" + if (j.title.isNotBlank()) " ${j.title}" else ""
+                                if (j != null) "Recording to job ${jobNo(j.number)}" + if (j.title.isNotBlank()) " ${j.title}" else ""
                                 else "Not linked to a job",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -809,7 +810,7 @@ fun MaterialsScreen(vm: MainVm, onOpenMaterials: (String) -> Unit) {
                 val lines = byJob[j.id]!!
                 val customerName = custNames[j.customerId].orEmpty()
                 ItemCard(
-                    overline = "#${j.number}",
+                    overline = "${jobNo(j.number)}",
                     title = j.title.ifBlank { customerName.ifBlank { "Job" } },
                     lines = listOfNotNull(
                         customerName.takeIf { it.isNotBlank() && j.title.isNotBlank() },
@@ -983,7 +984,7 @@ fun JobsScreen(vm: MainVm, onOpenJob: (String) -> Unit) {
         val cost = costByJob[j.id] ?: 0.0
         val customerName = custNames[j.customerId].orEmpty()
         ItemCard(
-            overline = "#${j.number}",
+            overline = "${jobNo(j.number)}",
             title = j.title.ifBlank { customerName.ifBlank { "Job" } },
             lines = listOfNotNull(
                 customerName.takeIf { it.isNotBlank() && j.title.isNotBlank() },
@@ -1065,23 +1066,23 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Job #${job.number}") },
+                title = { Text("Job ${jobNo(job.number)}") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
                 actions = {
                     Box {
                         IconButton(onClick = { shareMenu = true }) { Icon(Icons.Default.Share, "Share or export") }
                         DropdownMenu(expanded = shareMenu, onDismissRequest = { shareMenu = false }) {
-                            DropdownMenuItem(text = { Text("Share job summary (PDF)") }, onClick = {
+                            DropdownMenuItem(text = { Text("Share job summary (PDF)") }, enabled = job.number > 0, onClick = {
                                 shareMenu = false
                                 val data = JobExportData(job, customer, work, trips, materials, markupPct,
                                     (if (job.hourlyRate >= 0) job.hourlyRate else vm.prefs.hourlyRate.toDouble()), (if (job.ratePer10Km >= 0) job.ratePer10Km else vm.prefs.ratePer10Km.toDouble()), (if (job.calloutFee >= 0) job.calloutFee else vm.prefs.calloutFee.toDouble()))
-                                JobExport.share(context, JobExport.pdf(context, data), "application/pdf", "Job #${job.number}")
+                                JobExport.share(context, JobExport.pdf(context, data), "application/pdf", "Job ${jobNo(job.number)}")
                             })
-                            DropdownMenuItem(text = { Text("Share materials (CSV)") }, onClick = {
+                            DropdownMenuItem(text = { Text("Share materials (CSV)") }, enabled = job.number > 0, onClick = {
                                 shareMenu = false
                                 val data = JobExportData(job, customer, work, trips, materials, markupPct,
                                     (if (job.hourlyRate >= 0) job.hourlyRate else vm.prefs.hourlyRate.toDouble()), (if (job.ratePer10Km >= 0) job.ratePer10Km else vm.prefs.ratePer10Km.toDouble()), (if (job.calloutFee >= 0) job.calloutFee else vm.prefs.calloutFee.toDouble()))
-                                JobExport.share(context, JobExport.csv(context, data), "text/csv", "Job #${job.number} materials")
+                                JobExport.share(context, JobExport.csv(context, data), "text/csv", "Job ${jobNo(job.number)} materials")
                             })
                         }
                     }
@@ -1095,7 +1096,7 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
         ) {
             Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(job.title.ifBlank { "Job #${job.number}" }, style = MaterialTheme.typography.titleLarge)
+                    Text(job.title.ifBlank { "Job ${jobNo(job.number)}" }, style = MaterialTheme.typography.titleLarge)
                     if (job.reference.isNotBlank()) {
                         Text("Reference: ${job.reference}", style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant)

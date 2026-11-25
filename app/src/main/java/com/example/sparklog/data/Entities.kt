@@ -110,3 +110,6 @@ data class Todo(
     val updatedAt: Long = System.currentTimeMillis(),
     val deleted: Boolean = false,
 )
+
+/** "#1042", or "#…" for a job whose number the server hasn't assigned yet. */
+fun jobNo(number: Int) = if (number > 0) "#$number" else "#…"

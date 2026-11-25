@@ -113,6 +113,12 @@ def main():
         post({"since": 0, "materials": [dict(m, markupPercent=20.0, updatedAt=7100)]})
         assert post({"since": 0})["materials"][0]["markupPercent"] == 20.0
 
+        # a job pushed with number 0 (pending) gets a unique number from the server
+        pend = {"id": "jp", "number": 0, "customerId": "c1", "title": "Pending", "finished": False, "updatedAt": 7300, "deleted": False}
+        post({"since": 0, "jobs": [pend]})
+        nums = [j["number"] for j in post({"since": 0})["jobs"] if not j["deleted"]]
+        assert all(n > 0 for n in nums) and len(nums) == len(set(nums)), nums
+
         # job rates round-trip (default -1 = not fixed)
         post({"since": 0, "jobs": [dict(j1, hourlyRate=650.0, ratePer10Km=40.0, calloutFee=500.0, reference="PO 77", updatedAt=7400)]})
         jj = {j["id"]: j for j in post({"since": 0})["jobs"]}["j1"]

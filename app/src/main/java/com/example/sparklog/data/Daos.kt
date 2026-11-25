@@ -102,7 +102,7 @@ interface TodoDao {
 
 @Dao
 interface JobDao {
-    @Query("SELECT * FROM jobs WHERE deleted = 0 ORDER BY number DESC")
+    @Query("SELECT * FROM jobs WHERE deleted = 0 ORDER BY (number = 0) DESC, number DESC")
     fun observeAll(): Flow<List<Job>>
 
     @Query("SELECT MAX(number) FROM jobs")

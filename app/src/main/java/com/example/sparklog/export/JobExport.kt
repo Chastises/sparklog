@@ -8,6 +8,7 @@ import android.graphics.pdf.PdfDocument
 import androidx.core.content.FileProvider
 import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
+import com.example.sparklog.data.jobNo
 import com.example.sparklog.data.Material
 import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
@@ -83,11 +84,11 @@ object JobExport {
         fun q(s: String) = "\"" + s.replace("\"", "\"\"") + "\""
         for (m in d.materials.sortedWith(compareBy({ it.date }, { it.name }))) {
             sb.append(listOf(
-                d.job.number.toString(), q(d.job.reference), q(d.customer?.name.orEmpty()), m.date, q(m.eNumber), q(m.name), num(m.quantity), m.unit,
+                (d.job.number.takeIf { it > 0 }?.toString() ?: ""), q(d.job.reference), q(d.customer?.name.orEmpty()), m.date, q(m.eNumber), q(m.name), num(m.quantity), m.unit,
                 money(d.unitPrice(m)), money(d.lineTotal(m)),
             ).joinToString(";")).append("\n")
         }
-        val f = File(exportDir(context), "Job-${d.job.number}-materials.csv")
+        val f = File(exportDir(context), "Job-${d.job.number.takeIf { it > 0 } ?: "pending"}-materials.csv")
         f.writeText(sb.toString(), Charsets.UTF_8)
         return f
     }
@@ -97,7 +98,7 @@ object JobExport {
         val w = PdfWriter()
         val matTotal = d.materials.sumOf { d.lineTotal(it) }
 
-        w.text("Job #${d.job.number}" + if (d.job.title.isNotBlank()) " - ${d.job.title}" else "", w.title)
+        w.text("Job ${jobNo(d.job.number)}" + if (d.job.title.isNotBlank()) " - ${d.job.title}" else "", w.title)
         if (d.job.reference.isNotBlank()) w.text("Reference: ${d.job.reference}", w.body)
         w.gap(4f)
         d.customer?.let { c ->
@@ -178,7 +179,7 @@ object JobExport {
             w.row("Total incl. VAT", "", "", money(Markup.withVat(total)), w.boldSmall)
         }
 
-        val f = File(exportDir(context), "Job-${d.job.number}.pdf")
+        val f = File(exportDir(context), "Job-${d.job.number.takeIf { it > 0 } ?: "pending"}.pdf")
         w.finish(f)
         return f
     }

@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
+import com.example.sparklog.data.jobNo
 import com.example.sparklog.data.Material
 import com.example.sparklog.data.Todo
 import com.example.sparklog.data.Trip
@@ -225,7 +226,7 @@ fun CustomerDialog(
 internal fun jobLabel(j: Job, customerNames: Map<String, String>): String {
     val customer = customerNames[j.customerId].orEmpty()
     val rest = listOf(customer, j.title).filter { it.isNotBlank() }.joinToString(" - ")
-    return if (rest.isBlank()) "#${j.number}" else "#${j.number} $rest"
+    return if (rest.isBlank()) "${jobNo(j.number)}" else "${jobNo(j.number)} $rest"
 }
 
 /** Dropdown of jobs. Finished jobs are hidden unless already selected. "+ New job" creates one. */
@@ -300,7 +301,7 @@ fun JobDialog(
     fun ok(s: String) = s.isBlank() || (s.toNum()?.let { it >= 0 } == true)
     val markupOk = ok(markup) && ok(hourly) && ok(per10) && ok(callout)
     FormDialog(
-        title = if (initial == null) "New job" else "Job #${initial.number}",
+        title = if (initial == null) "New job" else "Job ${jobNo(initial.number)}",
         canSave = (customerId.isNotBlank() || title.isNotBlank()) && markupOk,
         onSave = {
             val base = initial ?: Job()
@@ -316,7 +317,9 @@ fun JobDialog(
         onDismiss = onDismiss,
     ) {
         Text(
-            if (initial == null) "The job number is assigned when you save." else "Job number: ${initial.number}",
+            if (initial == null) {
+                if (vm.prefs.serverUrl.isNotBlank()) "The server assigns the job number. It appears after the first sync (a few seconds when online)." else "The job number is assigned when you save."
+            } else if (initial.number > 0) "Job number: ${initial.number}" else "Job number: waiting for the server (syncs when online).",
             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
         )
         CustomerPicker(vm, customerId) { customerId = it }
