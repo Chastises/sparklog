@@ -172,6 +172,7 @@ def main():
             get("/catalog/item?enr=nope"); raise AssertionError("expected 404")
         except urllib.error.HTTPError as err:
             assert err.code == 404
+        assert json.load(urllib.request.urlopen(BASE + "/health"))["api"] >= 1  # version for the app's check
         # upload page + upload endpoint (build a tiny xlsx by hand)
         assert b"Upload price list" in urllib.request.urlopen(BASE + "/upload").read()
         import zipfile

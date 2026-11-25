@@ -64,8 +64,27 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
             WorkManager.getInstance(context).enqueueUniqueWork("sync-now", ExistingWorkPolicy.REPLACE, req)
         }
 
+        /**
+         * Version of the sync format this app speaks. Bump together with API_VERSION in server/server.py
+         * whenever a synced field is added or changed.
+         */
+        const val SYNC_API = 1
+
+        /** Refuses to sync with a server (or app) of another version, which could drop or overwrite data. */
+        private fun checkVersion(prefs: Prefs) {
+            val req = Request.Builder().url(prefs.serverUrl + "/health").build()
+            val text = client.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) error("Server returned ${resp.code}")
+                resp.body!!.string()
+            }
+            val server = try { JSONObject(text).optInt("api", 0) } catch (e: Exception) { error("That address is not a SparkLog server") }
+            if (server < SYNC_API) error("The server is out of date (version $server, the app needs $SYNC_API). Update the server by running the install command again, then sync.")
+            if (server > SYNC_API) error("The app is out of date (version $SYNC_API, the server is on $server). Update the app in Obtainium, then sync.")
+        }
+
         /** Runs a sync on the calling thread. Throws on network or server errors. */
         suspend fun sync(context: Context, prefs: Prefs) {
+            checkVersion(prefs)
             val db = AppDb.get(context)
             val startedAt = System.currentTimeMillis()
             val since = prefs.lastPush

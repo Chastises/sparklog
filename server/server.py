@@ -155,6 +155,10 @@ def store(db, rows_by_table):
 
 MAX_UPLOAD = 300 * 1024 * 1024
 
+# Sync format version. Bump it here AND in the app (SyncWorker.SYNC_API) whenever a synced field is
+# added or changed, so an app and server that don't match refuse to sync instead of losing data.
+API_VERSION = 1
+
 UPLOAD_PAGE = """<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
 <title>SparkLog price list</title>
 <body style="font-family:sans-serif;max-width:30em;margin:1em auto;padding:0 1em">
@@ -207,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
         if url.path == "/health":
-            return self._send(200, {"ok": True})
+            return self._send(200, {"ok": True, "api": API_VERSION})
         if url.path == "/upload":
             body = UPLOAD_PAGE.encode()
             self.send_response(200)
@@ -282,7 +286,7 @@ class Handler(BaseHTTPRequestHandler):
                 for table in TABLES:
                     apply_rows(self.db, table, payload.get(table, []), ts)
                 self.db.commit()
-                resp = {"serverTime": max(ts, last_ts(self.db))}
+                resp = {"serverTime": max(ts, last_ts(self.db)), "api": API_VERSION}
                 for table in TABLES:
                     resp[table] = rows_since(self.db, table, since)
             self._send(200, resp)
