@@ -98,7 +98,7 @@ data class Material(
     val deleted: Boolean = false,
 )
 
-/** A to-do item. dueAt is epoch millis of the reminder time; 0 = no reminder / no due time. */
+/** A to-do item. finishBy is the date it should be done by (yyyy-MM-dd, "" = none); dueAt is epoch millis of the reminder (0 = no reminder). */
 @Entity(tableName = "todos")
 data class Todo(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
@@ -106,6 +106,7 @@ data class Todo(
     val notes: String = "",
     val jobId: String = "",
     val dueAt: Long = 0L,
+    val finishBy: String = "",
     val done: Boolean = false,
     val updatedAt: Long = System.currentTimeMillis(),
     val deleted: Boolean = false,
@@ -120,6 +121,10 @@ data class Note(
     val updatedAt: Long = System.currentTimeMillis(),
     val deleted: Boolean = false,
 )
+
+/** The finish-by date, or null when none is set. */
+fun Todo.finishDate(): java.time.LocalDate? =
+    finishBy.takeIf { it.isNotBlank() }?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
 
 /** "#1042", or "#…" for a job whose number the server hasn't assigned yet. */
 fun jobNo(number: Int) = if (number > 0) "#$number" else "#…"

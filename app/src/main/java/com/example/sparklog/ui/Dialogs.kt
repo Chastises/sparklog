@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
 import com.example.sparklog.data.jobNo
+import com.example.sparklog.data.finishDate
 import com.example.sparklog.data.Material
 import com.example.sparklog.data.Todo
 import com.example.sparklog.data.Trip
@@ -573,20 +574,11 @@ fun TodoDialog(
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var notes by remember { mutableStateOf(initial?.notes ?: "") }
     var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
-    var due by remember {
-        mutableStateOf(
-            dueToDateTime(initial?.dueAt ?: 0L) ?: defaultDate?.let { d ->
-                val morning = d.atTime(8, 0)
-                if (morning.isAfter(LocalDateTime.now())) morning
-                else if (d == LocalDate.now()) LocalDateTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0)
-                else morning
-            },
-        )
-    }
+    var finishBy by remember { mutableStateOf(initial?.finishDate() ?: defaultDate) }
+    var due by remember { mutableStateOf(dueToDateTime(initial?.dueAt ?: 0L)) }
+    var pickFinish by remember { mutableStateOf(false) }
     var pickDate by remember { mutableStateOf(false) }
     var pickTime by remember { mutableStateOf(false) }
-
-    fun preset(dt: LocalDateTime) { due = dt }
     val now = LocalDateTime.now()
 
     FormDialog(
@@ -595,7 +587,7 @@ fun TodoDialog(
         onSave = {
             val base = initial ?: Todo(title = title.trim())
             val dueMs = due?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli() ?: 0L
-            onSave(base.copy(title = title.trim(), notes = notes.trim(), jobId = jobId, dueAt = dueMs))
+            onSave(base.copy(title = title.trim(), notes = notes.trim(), jobId = jobId, dueAt = dueMs, finishBy = finishBy?.toString() ?: ""))
         },
         onDelete = onDelete,
         onDismiss = onDismiss,
@@ -603,6 +595,23 @@ fun TodoDialog(
         Field("What needs doing", title, { title = it })
         Field("Notes", notes, { notes = it }, singleLine = false)
         JobPicker(vm, jobId) { jobId = it }
+
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Finish by")
+                Text(
+                    finishBy?.format(dueFormat) ?: "No date",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                )
+            }
+            Switch(
+                checked = finishBy != null,
+                onCheckedChange = { on -> finishBy = if (on) LocalDate.now() else null },
+            )
+        }
+        if (finishBy != null) {
+            OutlinedButton(onClick = { pickFinish = true }, modifier = Modifier.padding(top = 4.dp)) { Text("Change date") }
+        }
 
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -614,7 +623,14 @@ fun TodoDialog(
             }
             Switch(
                 checked = due != null,
-                onCheckedChange = { on -> due = if (on) now.plusHours(1).withMinute(0).withSecond(0).withNano(0) else null },
+                onCheckedChange = { on ->
+                    due = if (on) {
+                        val f = finishBy
+                        val morning = f?.atTime(8, 0)
+                        if (morning != null && morning.isAfter(now)) morning
+                        else now.plusHours(1).withMinute(0).withSecond(0).withNano(0)
+                    } else null
+                },
             )
         }
         if (due != null) {
@@ -622,14 +638,24 @@ fun TodoDialog(
                 OutlinedButton(onClick = { pickDate = true }) { Text("Date") }
                 OutlinedButton(onClick = { pickTime = true }) { Text("Time") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
-                TextButton(onClick = { preset(now.plusHours(1).withSecond(0).withNano(0)) }) { Text("In 1 h") }
-                TextButton(onClick = { preset(LocalDate.now().atTime(17, 0)) }) { Text("Today 17:00") }
-                TextButton(onClick = { preset(LocalDate.now().plusDays(1).atTime(7, 0)) }) { Text("Tomorrow 07:00") }
-            }
         }
     }
 
+    if (pickFinish) {
+        val state = rememberDatePickerState(
+            initialSelectedDateMillis = (finishBy ?: LocalDate.now()).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+        )
+        DatePickerDialog(
+            onDismissRequest = { pickFinish = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    state.selectedDateMillis?.let { ms -> finishBy = Instant.ofEpochMilli(ms).atZone(ZoneOffset.UTC).toLocalDate() }
+                    pickFinish = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { pickFinish = false }) { Text("Cancel") } },
+        ) { DatePicker(state = state) }
+    }
     val current = due
     if (pickDate && current != null) {
         val state = rememberDatePickerState(

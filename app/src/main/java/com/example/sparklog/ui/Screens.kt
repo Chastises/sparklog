@@ -47,6 +47,7 @@ import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
 import com.example.sparklog.data.Note
 import com.example.sparklog.data.jobNo
+import com.example.sparklog.data.finishDate
 import com.example.sparklog.data.Todo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -250,8 +251,8 @@ fun HomeScreen(
     val weekday = today.dayOfWeek != DayOfWeek.SATURDAY && today.dayOfWeek != DayOfWeek.SUNDAY
     val now = System.currentTimeMillis()
     val open = todos.filter { !it.done }
-    val overdue = open.filter { it.dueAt in 1 until now }
-    val upcoming = open.sortedWith(compareBy({ if (it.dueAt > 0) 0 else 1 }, { it.dueAt })).take(3)
+    val overdue = open.filter { it.finishDate()?.isBefore(today) == true }
+    val upcoming = open.sortedWith(compareBy({ if (it.finishBy.isBlank()) 1 else 0 }, { it.finishBy }, { it.dueAt })).take(3)
     val needJob = allMaterials.count { it.source == "invoice" && it.jobId.isBlank() }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -292,7 +293,7 @@ fun HomeScreen(
                         color = if (overdue.isNotEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                     )
                     upcoming.forEach { t ->
-                        val due = dueToDateTime(t.dueAt)?.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM HH:mm", Locale.ENGLISH))
+                        val due = t.finishDate()?.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH))
                         Text("• ${t.title}" + (due?.let { " ($it)" } ?: ""), modifier = Modifier.padding(top = 2.dp))
                     }
                 }
@@ -411,10 +412,10 @@ fun TodoScreen(vm: MainVm) {
     val today = LocalDate.now()
 
     val open = todos.filter { !it.done }
-        .sortedWith(compareBy({ if (it.dueAt > 0) 0 else 1 }, { it.dueAt }, { it.title.lowercase() }))
+        .sortedWith(compareBy({ if (it.finishBy.isBlank()) 1 else 0 }, { it.finishBy }, { it.dueAt }, { it.title.lowercase() }))
     val done = todos.filter { it.done }.sortedByDescending { it.updatedAt }
 
-    fun dateOf(t: Todo) = dueToDateTime(t.dueAt)?.toLocalDate()
+    fun dateOf(t: Todo) = t.finishDate()
     val overdue = open.filter { t -> dateOf(t)?.isBefore(today) == true }
     val todayList = open.filter { t -> dateOf(t) == today }
     val upcoming = open.filter { t -> dateOf(t)?.isAfter(today) == true }
@@ -476,8 +477,10 @@ private fun TodoHeader(title: String, count: Int, color: Color) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TodoRow(t: Todo, names: Map<String, String>, now: Long, showJob: Boolean = true, onToggle: () -> Unit, onClick: () -> Unit) {
-    val due = dueToDateTime(t.dueAt)?.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM HH:mm", Locale.ENGLISH))
-    val overdue = !t.done && t.dueAt in 1 until now
+    val finish = t.finishDate()
+    val finishText = finish?.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM", Locale.ENGLISH))?.let { "Finish by $it" }
+    val remind = dueToDateTime(t.dueAt)?.format(java.time.format.DateTimeFormatter.ofPattern("EEE d MMM HH:mm", Locale.ENGLISH))
+    val overdue = !t.done && finish?.isBefore(LocalDate.now()) == true
     val job = if (showJob && t.jobId.isNotBlank()) customerLabel(names, t.jobId, "") else ""
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Card(
@@ -497,10 +500,11 @@ private fun TodoRow(t: Todo, names: Map<String, String>, now: Long, showJob: Boo
                     color = if (t.done) muted else MaterialTheme.colorScheme.onSurface,
                     textDecoration = if (t.done) TextDecoration.LineThrough else null,
                 )
-                if (due != null) {
-                    Text(due, style = MaterialTheme.typography.labelLarge,
+                if (finishText != null) {
+                    Text(finishText, style = MaterialTheme.typography.labelLarge,
                         color = if (overdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                 }
+                if (remind != null) Text("Reminder $remind", style = MaterialTheme.typography.bodySmall, color = muted)
                 if (job.isNotBlank()) Text(job, style = MaterialTheme.typography.bodySmall, color = muted)
                 if (t.notes.isNotBlank()) Text(t.notes, style = MaterialTheme.typography.bodySmall, color = muted, maxLines = 2)
             }
@@ -522,7 +526,7 @@ fun CalendarScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit) {
     val materials by remember(ym) { vm.materialsMonth(ym) }.collectAsState(emptyList())
 
     val allTodos by vm.todos.collectAsState()
-    val todoDates = allTodos.filter { !it.done }.mapNotNull { dueToDateTime(it.dueAt)?.toLocalDate()?.toString() }.toSet()
+    val todoDates = allTodos.filter { !it.done }.mapNotNull { it.finishDate()?.toString() }.toSet()
     val workDates = work.map { it.date }.toSet()
     val tripDates = trips.map { it.date }.toSet()
     val materialDates = materials.map { it.date }.toSet()
@@ -622,7 +626,7 @@ fun DayScreen(vm: MainVm, date: LocalDate, onBack: () -> Unit) {
     val trips by remember(ds) { vm.tripsDay(ds) }.collectAsState(emptyList())
     val materials by remember(ds) { vm.materialsDay(ds) }.collectAsState(emptyList())
     val allTodos by vm.todos.collectAsState()
-    val dayTodos = allTodos.filter { dueToDateTime(it.dueAt)?.toLocalDate() == date }.sortedBy { it.dueAt }
+    val dayTodos = allTodos.filter { it.finishDate() == date }.sortedBy { it.dueAt }
     val names = rememberNames(vm)
     var dialog by remember { mutableStateOf<Any?>(null) }
 
@@ -1127,7 +1131,7 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
     val work = allWork.filter { it.jobId == jobId }.sortedWith(compareBy({ it.date }, { it.updatedAt }))
     val trips = allTrips.filter { it.jobId == jobId }.sortedWith(compareBy({ it.date }, { it.updatedAt }))
     val materials = allMaterials.filter { it.jobId == jobId }.sortedWith(compareBy({ it.date }, { it.updatedAt }))
-    val todos = allTodos.filter { it.jobId == jobId }.sortedWith(compareBy({ it.done }, { if (it.dueAt > 0) 0 else 1 }, { it.dueAt }))
+    val todos = allTodos.filter { it.jobId == jobId }.sortedWith(compareBy({ it.done }, { if (it.finishBy.isBlank()) 1 else 0 }, { it.finishBy }, { it.dueAt }))
     val cost = materials.sumOf { Markup.cost(it) }
     val markupPct = if (job.markupPercent >= 0) job.markupPercent else vm.prefs.defaultMarkup.toDouble()
     val customerPrice = materials.sumOf { Markup.lineTotal(it, markupPct) }

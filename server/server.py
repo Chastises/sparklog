@@ -41,7 +41,7 @@ TABLES = {
         reals=[], ints=[], bools=["finished"]),
     "jobs": dict(texts=["customerId", "title", "reference"], reals=["markupPercent", "hourlyRate", "ratePer10Km", "calloutFee"], ints=["number"], bools=["finished"]),
     "notes": dict(texts=["title", "text"], reals=[], ints=[], bools=[]),
-    "todos": dict(texts=["title", "notes", "jobId"], reals=[], ints=["dueAt"], bools=["done"]),
+    "todos": dict(texts=["title", "notes", "jobId", "finishBy"], reals=[], ints=["dueAt"], bools=["done"]),
     "work_entries": dict(texts=["date", "jobId", "customerId", "description"], reals=["hours", "hourlyRate"], ints=[], bools=["callout"]),
     "trips": dict(texts=["date", "jobId", "customerId", "fromPlace", "toPlace", "purpose", "source"],
                   reals=["km"], ints=[], bools=[]),
@@ -158,7 +158,7 @@ MAX_UPLOAD = 300 * 1024 * 1024
 
 # Sync format version. Bump it here AND in the app (SyncWorker.SYNC_API) whenever a synced field is
 # added or changed, so an app and server that don't match refuse to sync instead of losing data.
-API_VERSION = 2
+API_VERSION = 3
 
 UPLOAD_PAGE = """<!doctype html><meta name=viewport content="width=device-width,initial-scale=1">
 <title>SparkLog price list</title>

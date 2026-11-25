@@ -67,6 +67,17 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
     }
 }
 
+/** v10 -> v11: to-dos get their own finish-by date; the old date (it was the reminder) is copied over. */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `todos` ADD COLUMN `finishBy` TEXT NOT NULL DEFAULT ''")
+        db.execSQL(
+            "UPDATE `todos` SET `finishBy` = date(`dueAt` / 1000, 'unixepoch', 'localtime'), " +
+                "`updatedAt` = CAST(strftime('%s','now') AS INTEGER) * 1000 WHERE `dueAt` > 0"
+        )
+    }
+}
+
 /** v9 -> v10: notes. */
 val MIGRATION_9_10 = object : Migration(9, 10) {
     override fun migrate(db: SupportSQLiteDatabase) {
@@ -230,7 +241,7 @@ interface MaterialDao {
 
 @Database(
     entities = [Customer::class, Job::class, WorkEntry::class, Trip::class, Material::class, Todo::class, Note::class],
-    version = 10,
+    version = 11,
     exportSchema = false,
 )
 abstract class AppDb : RoomDatabase() {
@@ -246,7 +257,7 @@ abstract class AppDb : RoomDatabase() {
         @Volatile private var instance: AppDb? = null
         fun get(context: Context): AppDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, AppDb::class.java, "sparklog.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .build().also { instance = it }
         }
     }

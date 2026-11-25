@@ -69,7 +69,7 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
          * Version of the sync format this app speaks. Bump together with API_VERSION in server/server.py
          * whenever a synced field is added or changed.
          */
-        const val SYNC_API = 2
+        const val SYNC_API = 3
 
         /** Refuses to sync with a server (or app) of another version, which could drop or overwrite data. */
         private fun checkVersion(prefs: Prefs) {
@@ -184,12 +184,12 @@ private fun JSONObject.toNote() = Note(
 )
 
 private fun Todo.toJson() = JSONObject()
-    .put("id", id).put("title", title).put("notes", notes).put("jobId", jobId).put("dueAt", dueAt)
+    .put("id", id).put("title", title).put("notes", notes).put("jobId", jobId).put("dueAt", dueAt).put("finishBy", finishBy)
     .put("done", done).put("updatedAt", updatedAt).put("deleted", deleted)
 
 private fun JSONObject.toTodo() = Todo(
     id = getString("id"), title = getString("title"), notes = optString("notes"), jobId = optString("jobId"),
-    dueAt = optLong("dueAt"), done = optBoolean("done"),
+    dueAt = optLong("dueAt"), finishBy = optString("finishBy"), done = optBoolean("done"),
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )
 

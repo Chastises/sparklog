@@ -150,6 +150,10 @@ def main():
         post({"since": 0, "todos": [dict(todo, done=True, updatedAt=9000)]})
         assert post({"since": 0})["todos"][0]["done"] is True
 
+        # to-dos keep a separate finish-by date
+        post({"since": 0, "todos": [{"id": "tf", "title": "Finish", "finishBy": "2026-12-01", "dueAt": 0, "done": False, "updatedAt": 8500, "deleted": False}]})
+        assert [x for x in post({"since": 0})["todos"] if x["id"] == "tf"][0]["finishBy"] == "2026-12-01"
+
         # bad payload
         try:
             post({"since": 0, "trips": [{"id": "x"}]}); raise AssertionError("expected 400")
