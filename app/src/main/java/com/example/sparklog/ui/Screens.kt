@@ -455,6 +455,8 @@ fun CalendarScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit) {
     val trips by remember(ym) { vm.tripsMonth(ym) }.collectAsState(emptyList())
     val materials by remember(ym) { vm.materialsMonth(ym) }.collectAsState(emptyList())
 
+    val allTodos by vm.todos.collectAsState(emptyList())
+    val todoDates = allTodos.filter { !it.done }.mapNotNull { dueToDateTime(it.dueAt)?.toLocalDate()?.toString() }.toSet()
     val workDates = work.map { it.date }.toSet()
     val tripDates = trips.map { it.date }.toSet()
     val materialDates = materials.map { it.date }.toSet()
@@ -509,6 +511,7 @@ fun CalendarScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit) {
                                     if (ds in workDates) Dot(WorkColor)
                                     if (ds in tripDates) Dot(TripColor)
                                     if (ds in materialDates) Dot(MaterialColor)
+                                    if (ds in todoDates) Dot(MaterialTheme.colorScheme.tertiary)
                                 }
                             }
                         }
@@ -522,6 +525,7 @@ fun CalendarScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit) {
             Dot(WorkColor); Text("Work", style = MaterialTheme.typography.labelSmall)
             Dot(TripColor); Text("Driving", style = MaterialTheme.typography.labelSmall)
             Dot(MaterialColor); Text("Materials", style = MaterialTheme.typography.labelSmall)
+            Dot(MaterialTheme.colorScheme.tertiary); Text("To-do", style = MaterialTheme.typography.labelSmall)
             Text("Red = weekday missing", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
         }
 
@@ -551,6 +555,8 @@ fun DayScreen(vm: MainVm, date: LocalDate, onBack: () -> Unit) {
     val work by remember(ds) { vm.workDay(ds) }.collectAsState(emptyList())
     val trips by remember(ds) { vm.tripsDay(ds) }.collectAsState(emptyList())
     val materials by remember(ds) { vm.materialsDay(ds) }.collectAsState(emptyList())
+    val allTodos by vm.todos.collectAsState(emptyList())
+    val dayTodos = allTodos.filter { dueToDateTime(it.dueAt)?.toLocalDate() == date }.sortedBy { it.dueAt }
     val names = rememberNames(vm)
     var dialog by remember { mutableStateOf<Any?>(null) }
 
@@ -580,10 +586,17 @@ fun DayScreen(vm: MainVm, date: LocalDate, onBack: () -> Unit) {
             SectionHeader("Materials", "${materials.size}") { dialog = "newMat" }
             materials.forEach { MaterialRow(it, names, showDate = false) { dialog = it } }
             if (materials.isEmpty()) EmptyHint("No materials.")
+
+            SectionHeader("To-do", "${dayTodos.count { !it.done }} open") { dialog = "newTodo" }
+            val nowMs = System.currentTimeMillis()
+            dayTodos.forEach { t -> TodoRow(t, names, nowMs, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
+            if (dayTodos.isEmpty()) EmptyHint("No to-dos for this day.")
         }
     }
 
     when (val d = dialog) {
+        "newTodo" -> TodoDialog(vm, null, { vm.save(it); dialog = null }, null, defaultDate = date) { dialog = null }
+        is Todo -> TodoDialog(vm, d, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
         "newWork" -> WorkDialog(vm, null, ds, { vm.save(it); dialog = null }, null) { dialog = null }
         is WorkEntry -> WorkDialog(vm, d, ds, { vm.save(it); dialog = null }, { vm.delete(d); dialog = null }) { dialog = null }
         "newTrip" -> TripDialog(vm, null, ds, { vm.save(it); dialog = null }, null) { dialog = null }

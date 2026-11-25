@@ -545,12 +545,23 @@ fun TodoDialog(
     onSave: (Todo) -> Unit,
     onDelete: (() -> Unit)?,
     defaultJobId: String = "",
+    /** A new to-do added from the calendar gets this day (08:00, or the next full hour if that has passed). */
+    defaultDate: LocalDate? = null,
     onDismiss: () -> Unit,
 ) {
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var notes by remember { mutableStateOf(initial?.notes ?: "") }
     var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
-    var due by remember { mutableStateOf(dueToDateTime(initial?.dueAt ?: 0L)) }
+    var due by remember {
+        mutableStateOf(
+            dueToDateTime(initial?.dueAt ?: 0L) ?: defaultDate?.let { d ->
+                val morning = d.atTime(8, 0)
+                if (morning.isAfter(LocalDateTime.now())) morning
+                else if (d == LocalDate.now()) LocalDateTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0)
+                else morning
+            },
+        )
+    }
     var pickDate by remember { mutableStateOf(false) }
     var pickTime by remember { mutableStateOf(false) }
 
