@@ -198,8 +198,8 @@ fun SparkLogRoot(initialDay: LocalDate?, initialTab: String?, vm: MainVm = viewM
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun JobsHub(vm: MainVm, section: Int, onSection: (Int) -> Unit, onOpenJob: (String) -> Unit, onOpenMaterials: (String) -> Unit) {
-    val titles = listOf("Jobs", "Customers", "Drive", "Materials") // indexed by section id
-    val order = listOf(0, 3, 2, 1) // order shown: Jobs, Materials, Drive, Customers
+    val titles = listOf("Jobs", "Customers", "Trips", "Materials") // indexed by section id
+    val order = listOf(0, 3, 2, 1) // order shown: Jobs, Materials, Trips, Customers
     Column(Modifier.fillMaxSize()) {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
             order.forEachIndexed { pos, id ->
@@ -594,7 +594,7 @@ fun CalendarScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit) {
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Dot(WorkColor); Text("Work", style = MaterialTheme.typography.labelSmall)
-            Dot(TripColor); Text("Driving", style = MaterialTheme.typography.labelSmall)
+            Dot(TripColor); Text("Trips", style = MaterialTheme.typography.labelSmall)
             Dot(MaterialColor); Text("Materials", style = MaterialTheme.typography.labelSmall)
             Dot(MaterialTheme.colorScheme.tertiary); Text("To-do", style = MaterialTheme.typography.labelSmall)
             Text("Red = weekday missing", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
@@ -650,7 +650,7 @@ fun DayScreen(vm: MainVm, date: LocalDate, onBack: () -> Unit) {
             }
             if (work.isEmpty()) EmptyHint("Nothing logged for this day yet.")
 
-            SectionHeader("Driving", "${fmt(trips.sumOf { it.km })} km") { dialog = "newTrip" }
+            SectionHeader("Trips", "${fmt(trips.sumOf { it.km })} km") { dialog = "newTrip" }
             trips.forEach { TripRow(it, names, showDate = false) { dialog = it } }
             if (trips.isEmpty()) EmptyHint("No trips.")
 
@@ -1307,7 +1307,7 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
             }
             if (work.isEmpty()) EmptyHint("No hours logged on this job.")
 
-            SectionHeader("Driving", "${fmt(trips.sumOf { it.km })} km") { dialog = "newTrip" }
+            SectionHeader("Trips", "${fmt(trips.sumOf { it.km })} km") { dialog = "newTrip" }
             trips.forEach { t -> TripRow(t, names, showDate = true, showJob = false) { dialog = t } }
             if (trips.isEmpty()) EmptyHint("No trips.")
 
