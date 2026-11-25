@@ -111,5 +111,15 @@ data class Todo(
     val deleted: Boolean = false,
 )
 
+/** A free-text note pinned on Home. Synced like everything else. */
+@Entity(tableName = "notes")
+data class Note(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val title: String = "",
+    val text: String = "",
+    val updatedAt: Long = System.currentTimeMillis(),
+    val deleted: Boolean = false,
+)
+
 /** "#1042", or "#…" for a job whose number the server hasn't assigned yet. */
 fun jobNo(number: Int) = if (number > 0) "#$number" else "#…"

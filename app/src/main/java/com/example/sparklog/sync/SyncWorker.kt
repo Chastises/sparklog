@@ -16,6 +16,7 @@ import com.example.sparklog.data.Job
 import com.example.sparklog.data.Material
 import com.example.sparklog.data.Prefs
 import com.example.sparklog.data.Todo
+import com.example.sparklog.data.Note
 import com.example.sparklog.data.Trip
 import com.example.sparklog.todo.TodoScheduler
 import com.example.sparklog.data.WorkEntry
@@ -68,7 +69,7 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
          * Version of the sync format this app speaks. Bump together with API_VERSION in server/server.py
          * whenever a synced field is added or changed.
          */
-        const val SYNC_API = 1
+        const val SYNC_API = 2
 
         /** Refuses to sync with a server (or app) of another version, which could drop or overwrite data. */
         private fun checkVersion(prefs: Prefs) {
@@ -94,6 +95,7 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
                 put("customers", JSONArray(db.customers().changedSince(since).map { it.toJson() }))
                 put("jobs", JSONArray(db.jobs().changedSince(since).map { it.toJson() }))
                 put("todos", JSONArray(db.todos().changedSince(since).map { it.toJson() }))
+                put("notes", JSONArray(db.notes().changedSince(since).map { it.toJson() }))
                 put("work_entries", JSONArray(db.work().changedSince(since).map { it.toJson() }))
                 put("trips", JSONArray(db.trips().changedSince(since).map { it.toJson() }))
                 put("materials", JSONArray(db.materials().changedSince(since).map { it.toJson() }))
@@ -127,6 +129,11 @@ class SyncWorker(private val ctx: Context, params: WorkerParameters) : Coroutine
                     db.todos().upsert(remote)
                     TodoScheduler.sync(context, remote)
                 }
+            }
+            json.optJSONArray("notes")?.forEachObject { o ->
+                val remote = o.toNote()
+                val local = db.notes().get(remote.id)
+                if (local == null || remote.updatedAt > local.updatedAt) db.notes().upsert(remote)
             }
             json.optJSONArray("work_entries")?.forEachObject { o ->
                 val remote = o.toWorkEntry()
@@ -165,6 +172,14 @@ private fun JSONObject.toCustomer() = Customer(
     phone = optString("phone"), email = optString("email"), address = optString("address"),
     postalCode = optString("postalCode"), city = optString("city"), orgNumber = optString("orgNumber"),
     propertyId = optString("propertyId"), notes = optString("notes"), finished = optBoolean("finished"),
+    updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
+)
+
+private fun Note.toJson() = JSONObject()
+    .put("id", id).put("title", title).put("text", text).put("updatedAt", updatedAt).put("deleted", deleted)
+
+private fun JSONObject.toNote() = Note(
+    id = getString("id"), title = optString("title"), text = optString("text"),
     updatedAt = getLong("updatedAt"), deleted = optBoolean("deleted"),
 )
 

@@ -9,6 +9,7 @@ import com.example.sparklog.data.Job
 import com.example.sparklog.data.Material
 import com.example.sparklog.data.Prefs
 import com.example.sparklog.data.Todo
+import com.example.sparklog.data.Note
 import com.example.sparklog.todo.TodoScheduler
 import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
@@ -41,6 +42,20 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
     // list is only ever shown when it really is empty (no flash of "No materials yet" while loading).
     val customers = db.customers().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val jobs = db.jobs().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val notes = db.notes().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun save(n: Note) = launchSync { db.notes().upsert(n.copy(updatedAt = now())) }
+    fun delete(n: Note) = launchSync { db.notes().upsert(n.copy(deleted = true, updatedAt = now())) }
+
+    init {
+        // The old single note (stored only on this phone) becomes the first synced note.
+        val old = prefs.homeNote
+        if (old.isNotBlank()) {
+            prefs.homeNote = ""
+            launchSync { db.notes().upsert(Note(title = "Notes", text = old, updatedAt = now())) }
+        }
+    }
+
     val todos = db.todos().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun save(t: Todo) {

@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
 import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
+import com.example.sparklog.data.Note
 import com.example.sparklog.data.jobNo
 import com.example.sparklog.data.Todo
 import androidx.compose.material3.AlertDialog
@@ -242,8 +243,9 @@ fun HomeScreen(
     val allTrips by vm.allTrips.collectAsState()
     val names = rememberNames(vm)
 
-    var note by remember { mutableStateOf(vm.prefs.homeNote) }
-    var editNote by remember { mutableStateOf(false) }
+    val notes by vm.notes.collectAsState()
+    var editNote by remember { mutableStateOf<Note?>(null) }
+    var newNote by remember { mutableStateOf(false) }
 
     val weekday = today.dayOfWeek != DayOfWeek.SATURDAY && today.dayOfWeek != DayOfWeek.SUNDAY
     val now = System.currentTimeMillis()
@@ -343,30 +345,56 @@ fun HomeScreen(
             Column(Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Notes", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { editNote = true }) { Text("Edit") }
+                    TextButton(onClick = { newNote = true }) { Text("Add note") }
                 }
-                Text(
-                    note.ifBlank { "Pin anything here: gate codes, supplier numbers, reminders to yourself." },
-                    color = if (note.isBlank()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
-                )
-                Text("Saved on this phone only.", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+                if (notes.isEmpty()) {
+                    Text("Pin anything here: gate codes, supplier numbers, reminders to yourself.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                notes.forEach { n ->
+                    Column(Modifier.fillMaxWidth().clickable { editNote = n }.padding(vertical = 8.dp)) {
+                        if (n.title.isNotBlank()) Text(n.title, style = MaterialTheme.typography.titleSmall)
+                        if (n.text.isNotBlank()) Text(n.text, maxLines = 4)
+                    }
+                }
             }
         }
     }
 
-    if (editNote) {
-        var draft by remember { mutableStateOf(note) }
+    if (newNote || editNote != null) {
+        val existing = editNote
+        var title by remember(existing) { mutableStateOf(existing?.title.orEmpty()) }
+        var text by remember(existing) { mutableStateOf(existing?.text.orEmpty()) }
+        val close = { newNote = false; editNote = null }
         AlertDialog(
-            onDismissRequest = { editNote = false },
-            title = { Text("Notes") },
+            onDismissRequest = close,
+            title = { Text(if (existing == null) "New note" else "Note") },
             text = {
-                OutlinedTextField(draft, { draft = it }, modifier = Modifier.fillMaxWidth().height(180.dp))
+                Column {
+                    OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(text, { text = it }, label = { Text("Note") }, modifier = Modifier.fillMaxWidth().height(160.dp))
+                }
             },
             confirmButton = {
-                TextButton(onClick = { note = draft; vm.prefs.homeNote = draft; editNote = false }) { Text("Save") }
+                TextButton(
+                    enabled = title.isNotBlank() || text.isNotBlank(),
+                    onClick = {
+                        vm.save((existing ?: Note()).copy(title = title.trim(), text = text))
+                        close()
+                    },
+                ) { Text("Save") }
             },
-            dismissButton = { TextButton(onClick = { editNote = false }) { Text("Cancel") } },
+            dismissButton = {
+                Row {
+                    if (existing != null) {
+                        TextButton(onClick = { vm.delete(existing); close() }) {
+                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    TextButton(onClick = close) { Text("Cancel") }
+                }
+            },
         )
     }
 }

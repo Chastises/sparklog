@@ -134,6 +134,12 @@ def main():
         got = [r for r in post({"since": 0})["work_entries"] if r["id"] == "w9"][0]
         assert got["hourlyRate"] == 650.0 and got["callout"] is True, got
 
+        # notes round-trip and soft-delete
+        post({"since": 0, "notes": [{"id": "n1", "title": "Gate", "text": "code 1234", "updatedAt": 8000, "deleted": False}]})
+        assert post({"since": 0})["notes"][0]["text"] == "code 1234"
+        post({"since": 0, "notes": [{"id": "n1", "title": "Gate", "text": "code 1234", "updatedAt": 8100, "deleted": True}]})
+        assert post({"since": 0})["notes"][0]["deleted"] is True
+
         # todos: epoch-millis due time and done flag round-trip, completion syncs
         due = 1795600000000
         todo = {"id": "td1", "title": "Order cable", "notes": "3G1.5", "jobId": "j1", "dueAt": due,

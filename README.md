@@ -84,6 +84,8 @@ This writes `catalog.db` next to the sync database (or set `SPARKLOG_CATALOG`). 
 
 The server itself speaks plain HTTP. For HTTPS, put it behind the reverse proxy you already run (Caddy, nginx, Nginx Proxy Manager, Traefik): point a hostname at `http://<server-ip>:8787`, then use `https://that-hostname` as the Server URL in Admin. If the proxy runs on the same machine, add `SPARKLOG_HOST=127.0.0.1` to `/etc/sparklog.env` and restart the service (`systemctl restart sparklog`) so the plain HTTP port can't be reached directly. If the proxy uses a private certificate authority, install that CA certificate on the phone. Once everything uses HTTPS, `usesCleartextTraffic` can be removed from the manifest. The token is stored encrypted on the phone (Android Keystore).
 
+Notes on Home: any number of notes, each with a title, synced to the server and deletable.
+
 ## Version check
 
 The app asks the server for its sync version before every sync (`API_VERSION` in `server/server.py`, `SYNC_API` in `SyncWorker.kt`). If they differ it does not sync and says which side to update: the server (run the install command again) or the app (Obtainium). Bump both numbers whenever a synced field is added or changed. A server from before this check counts as version 0, so it asks you to update it.
