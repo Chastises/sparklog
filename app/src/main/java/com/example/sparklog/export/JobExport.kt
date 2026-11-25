@@ -79,11 +79,11 @@ object JobExport {
      */
     fun csv(context: Context, d: JobExportData): File {
         val sb = StringBuilder("﻿") // BOM so Excel reads UTF-8
-        sb.append("Job;Customer;Date;E-number;Material;Quantity;Unit;Unit price;Total\n")
+        sb.append("Job;Reference;Customer;Date;E-number;Material;Quantity;Unit;Unit price;Total\n")
         fun q(s: String) = "\"" + s.replace("\"", "\"\"") + "\""
         for (m in d.materials.sortedWith(compareBy({ it.date }, { it.name }))) {
             sb.append(listOf(
-                d.job.number.toString(), q(d.customer?.name.orEmpty()), m.date, q(m.eNumber), q(m.name), num(m.quantity), m.unit,
+                d.job.number.toString(), q(d.job.reference), q(d.customer?.name.orEmpty()), m.date, q(m.eNumber), q(m.name), num(m.quantity), m.unit,
                 money(d.unitPrice(m)), money(d.lineTotal(m)),
             ).joinToString(";")).append("\n")
         }
@@ -98,6 +98,7 @@ object JobExport {
         val matTotal = d.materials.sumOf { d.lineTotal(it) }
 
         w.text("Job #${d.job.number}" + if (d.job.title.isNotBlank()) " - ${d.job.title}" else "", w.title)
+        if (d.job.reference.isNotBlank()) w.text("Reference: ${d.job.reference}", w.body)
         w.gap(4f)
         d.customer?.let { c ->
             w.text(c.name, w.bold)

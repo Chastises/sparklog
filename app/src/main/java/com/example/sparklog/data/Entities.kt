@@ -36,6 +36,8 @@ data class Job(
     val finished: Boolean = false,
     /** Material markup in percent for this job; negative = use the default from Settings. */
     val markupPercent: Double = -1.0,
+    /** Customer's own reference (order number, PO, contact...), shown on the job and in the PDF. */
+    val reference: String = "",
     /** Rates for this job, fixed when it is created (negative = not fixed yet, follows Settings). */
     val hourlyRate: Double = -1.0,
     val ratePer10Km: Double = -1.0,

@@ -288,7 +288,9 @@ fun JobDialog(
 ) {
     var customerId by remember { mutableStateOf(initial?.customerId ?: "") }
     var title by remember { mutableStateOf(initial?.title ?: "") }
+    var reference by remember { mutableStateOf(initial?.reference ?: "") }
     var finished by remember { mutableStateOf(initial?.finished ?: false) }
+    var showRates by remember { mutableStateOf(false) }
     // A new job starts with the current default rates filled in; they are fixed on the job when it is saved.
     fun start(v: Double?, default: Float) = (v?.takeIf { it >= 0 } ?: if (initial == null) default.toDouble() else null)?.let { fmt(it) } ?: ""
     var markup by remember { mutableStateOf(start(initial?.markupPercent, vm.prefs.defaultMarkup)) }
@@ -303,7 +305,7 @@ fun JobDialog(
         onSave = {
             val base = initial ?: Job()
             onSave(base.copy(
-                customerId = customerId, title = title.trim(), finished = finished,
+                customerId = customerId, title = title.trim(), reference = reference.trim(), finished = finished,
                 markupPercent = markup.toNum()?.takeIf { it >= 0 } ?: -1.0,
                 hourlyRate = hourly.toNum()?.takeIf { it >= 0 } ?: -1.0,
                 ratePer10Km = per10.toNum()?.takeIf { it >= 0 } ?: -1.0,
@@ -319,15 +321,31 @@ fun JobDialog(
         )
         CustomerPicker(vm, customerId) { customerId = it }
         Field("Title / what the job is", title, { title = it })
-        Text(
-            "Rates for this job (ex VAT). They stay as set here, whatever you change in Settings later.",
-            style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        Field("Material markup %", markup, { markup = it }, number = true, isError = !ok(markup))
-        Field("Hourly rate (kr/h)", hourly, { hourly = it }, number = true, isError = !ok(hourly))
-        Field("Driving (kr per 10 km)", per10, { per10 = it }, number = true, isError = !ok(per10))
-        Field("Call-out fee (kr per visit)", callout, { callout = it }, number = true, isError = !ok(callout))
+        Field("Reference (optional)", reference, { reference = it })
+        if (!showRates && markupOk) {
+            val parts = listOf(
+                markup.ifBlank { fmt(vm.prefs.defaultMarkup.toDouble()) } + "% markup",
+                hourly.ifBlank { fmt(vm.prefs.hourlyRate.toDouble()) } + " kr/h",
+                per10.ifBlank { fmt(vm.prefs.ratePer10Km.toDouble()) } + " kr per 10 km",
+                callout.ifBlank { fmt(vm.prefs.calloutFee.toDouble()) } + " kr call-out",
+            )
+            Text(
+                (if (initial == null) "Your default rates will be used: " else "Rates on this job: ") + parts.joinToString(", ") + " (ex VAT).",
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            TextButton(onClick = { showRates = true }) { Text("Change rates for this job") }
+        } else {
+            Text(
+                "Rates for this job (ex VAT). They stay as set here, whatever you change in Settings later.",
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            Field("Material markup %", markup, { markup = it }, number = true, isError = !ok(markup))
+            Field("Hourly rate (kr/h)", hourly, { hourly = it }, number = true, isError = !ok(hourly))
+            Field("Driving (kr per 10 km)", per10, { per10 = it }, number = true, isError = !ok(per10))
+            Field("Call-out fee (kr per visit)", callout, { callout = it }, number = true, isError = !ok(callout))
+        }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Mark job as finished")

@@ -114,9 +114,9 @@ def main():
         assert post({"since": 0})["materials"][0]["markupPercent"] == 20.0
 
         # job rates round-trip (default -1 = not fixed)
-        post({"since": 0, "jobs": [dict(j1, hourlyRate=650.0, ratePer10Km=40.0, calloutFee=500.0, updatedAt=7400)]})
+        post({"since": 0, "jobs": [dict(j1, hourlyRate=650.0, ratePer10Km=40.0, calloutFee=500.0, reference="PO 77", updatedAt=7400)]})
         jj = {j["id"]: j for j in post({"since": 0})["jobs"]}["j1"]
-        assert (jj["hourlyRate"], jj["ratePer10Km"], jj["calloutFee"]) == (650.0, 40.0, 500.0), jj
+        assert (jj["hourlyRate"], jj["ratePer10Km"], jj["calloutFee"]) == (650.0, 40.0, 500.0) and jj["reference"] == "PO 77", jj
 
         # work entries: hourly rate (default -1) and call-out flag round-trip
         w = {"id": "w9", "date": "2026-11-24", "jobId": "j1", "customerId": "c1", "description": "x", "hours": 2,

@@ -39,7 +39,7 @@ TABLES = {
         texts=["name", "contactPerson", "phone", "email", "address", "postalCode", "city",
                "orgNumber", "propertyId", "notes"],
         reals=[], ints=[], bools=["finished"]),
-    "jobs": dict(texts=["customerId", "title"], reals=["markupPercent", "hourlyRate", "ratePer10Km", "calloutFee"], ints=["number"], bools=["finished"]),
+    "jobs": dict(texts=["customerId", "title", "reference"], reals=["markupPercent", "hourlyRate", "ratePer10Km", "calloutFee"], ints=["number"], bools=["finished"]),
     "todos": dict(texts=["title", "notes", "jobId"], reals=[], ints=["dueAt"], bools=["done"]),
     "work_entries": dict(texts=["date", "jobId", "customerId", "description"], reals=["hours", "hourlyRate"], ints=[], bools=["callout"]),
     "trips": dict(texts=["date", "jobId", "customerId", "fromPlace", "toPlace", "purpose", "source"],

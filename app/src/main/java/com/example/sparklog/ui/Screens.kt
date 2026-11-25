@@ -1094,6 +1094,10 @@ fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMateria
             Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Column(Modifier.padding(16.dp)) {
                     Text(job.title.ifBlank { "Job #${job.number}" }, style = MaterialTheme.typography.titleLarge)
+                    if (job.reference.isNotBlank()) {
+                        Text("Reference: ${job.reference}", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Text(
                         if (job.finished) "Finished" else "Ongoing",
                         color = if (job.finished) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
