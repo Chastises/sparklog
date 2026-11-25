@@ -49,6 +49,10 @@ fun AdminScreen(vm: MainVm) {
     var showToken by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var askLogin by remember { mutableStateOf(false) }
+    var askReset by remember { mutableStateOf(false) }
+    var resetText by remember { mutableStateOf("") }
+    var resetting by remember { mutableStateOf(false) }
+    var resetStatus by remember { mutableStateOf("") }
     var hostKeySaved by remember { mutableStateOf(prefs.sshHostKey.isNotEmpty()) }
 
     // update run
@@ -101,6 +105,50 @@ fun AdminScreen(vm: MainVm) {
         if (hostKeySaved) {
             TextButton(onClick = { prefs.sshHostKey = ""; hostKeySaved = false }) { Text("Forget saved SSH key") }
         }
+
+        Spacer(Modifier.height(24.dp))
+        Text("Development", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Deletes ALL data (customers, jobs, hours, driving, materials, to-dos, notes) on the server and on this phone. " +
+                "Job numbers start again at 1001. The server saves a backup copy of its database first.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(
+            onClick = { resetText = ""; askReset = true },
+            enabled = !resetting,
+            modifier = Modifier.padding(top = 8.dp),
+        ) { Text(if (resetting) "Resetting..." else "Reset all data", color = MaterialTheme.colorScheme.error) }
+        if (resetStatus.isNotEmpty()) Text(resetStatus, Modifier.padding(top = 8.dp))
+    }
+
+    if (askReset) {
+        AlertDialog(
+            onDismissRequest = { askReset = false },
+            title = { Text("Reset all data?") },
+            text = {
+                Column {
+                    Text("This cannot be undone from the app. Type RESET to confirm.")
+                    OutlinedTextField(resetText, { resetText = it }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = resetText == "RESET",
+                    onClick = {
+                        askReset = false
+                        resetting = true
+                        resetStatus = ""
+                        scope.launch {
+                            save()
+                            resetStatus = vm.resetEverything() ?: "Everything was reset."
+                            resetting = false
+                        }
+                    },
+                ) { Text("Delete everything", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { askReset = false }) { Text("Cancel") } },
+        )
     }
 
     if (askLogin) {

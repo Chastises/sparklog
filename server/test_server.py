@@ -210,6 +210,24 @@ def main():
             urllib.request.urlopen(bad); raise AssertionError("expected 401")
         except urllib.error.HTTPError as err:
             assert err.code == 401
+        # development reset: needs the token and the confirm word, backs up, empties everything, numbers restart
+        def reset(body, token=TOKEN):
+            r = urllib.request.Request(BASE + "/admin/reset", data=json.dumps(body).encode(), method="POST",
+                                       headers={"Authorization": f"Bearer {token}"})
+            return urllib.request.urlopen(r)
+        for body, tok, code in (({"confirm": "RESET"}, "nope", 401), ({}, TOKEN, 400)):
+            try:
+                reset(body, tok); raise AssertionError("expected an error")
+            except urllib.error.HTTPError as err:
+                assert err.code == code, err.code
+        out = json.load(reset({"confirm": "RESET"}))
+        assert out["ok"] and out["backup"].startswith("t.db.bak-"), out
+        after = post({"since": 0})
+        assert all(len(after[k]) == 0 for k in ("customers", "jobs", "todos", "notes", "work_entries", "trips", "materials"))
+        fresh = {"id": "jr", "number": 0, "customerId": "", "title": "After reset", "finished": False, "updatedAt": 99000, "deleted": False}
+        post({"since": 0, "jobs": [fresh]})
+        assert post({"since": 0})["jobs"][0]["number"] == 1001
+
         print("all server tests passed")
     finally:
         proc.terminate()

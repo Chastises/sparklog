@@ -86,6 +86,8 @@ The server itself speaks plain HTTP. For HTTPS, put it behind the reverse proxy 
 
 Notes on Home: any number of notes, each with a title, synced to the server and deletable.
 
+Development reset: Admin has a "Reset all data" button (type RESET to confirm). It makes the server save a backup copy of its database (`sparklog.db.bak-<time>` next to it), empties the server and the phone, and job numbers restart at 1001. Needs a server that has this endpoint.
+
 ## Version check
 
 The app asks the server for its sync version before every sync (`API_VERSION` in `server/server.py`, `SYNC_API` in `SyncWorker.kt`). If they differ it does not sync and says which side to update: the server (run the install command again) or the app (Obtainium). Bump both numbers whenever a synced field is added or changed. A server from before this check counts as version 0, so it asks you to update it.

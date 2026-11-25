@@ -13,6 +13,7 @@ import com.example.sparklog.data.Note
 import com.example.sparklog.todo.TodoScheduler
 import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
+import com.example.sparklog.sync.ServerReset
 import com.example.sparklog.sync.SyncWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
@@ -136,6 +137,24 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
             block()
             SyncWorker.syncSoon(app)
         }
+    }
+
+    /**
+     * Development reset: empties the server (after it backs itself up) and then this phone.
+     * Returns null on success or an error message; nothing is wiped locally if the server step fails.
+     */
+    suspend fun resetEverything(): String? = try {
+        withContext(Dispatchers.IO) {
+            val backup = if (prefs.serverUrl.isNotBlank() && prefs.token.isNotBlank()) ServerReset.run(prefs) else null
+            androidx.work.WorkManager.getInstance(app).cancelAllWork()
+            db.clearAllTables()
+            prefs.lastPull = 0L
+            prefs.lastPush = 0L
+            prefs.homeNote = ""
+            backup
+        }.let { null }
+    } catch (e: Exception) {
+        e.message ?: e.javaClass.simpleName
     }
 
     /** Manual sync for the settings screen. Returns null on success or an error message. */

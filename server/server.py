@@ -266,12 +266,37 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             os.unlink(tmp.name)
 
+    def _reset(self):
+        """Development only: back up the database, then delete every synced row (job numbers restart at 1001)."""
+        if not self._authorized():
+            return self._send(401, {"error": "unauthorized"})
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length)) if 0 < length <= 1024 else {}
+        except ValueError:
+            body = {}
+        if body.get("confirm") != "RESET":
+            return self._send(400, {"error": 'send {"confirm": "RESET"}'})
+        with lock:
+            backup = f"{Handler.db_path}.bak-{time.strftime('%Y%m%d-%H%M%S')}"
+            dst = sqlite3.connect(backup)
+            try:
+                self.db.backup(dst)
+            finally:
+                dst.close()
+            for table in TABLES:
+                self.db.execute(f"DELETE FROM {table}")
+            self.db.commit()
+        self._send(200, {"ok": True, "backup": os.path.basename(backup)})
+
     def do_POST(self):
         url = urllib.parse.urlparse(self.path)
         if url.path == "/catalog/upload":
             if not self._authorized():
                 return self._send(401, {"error": "unauthorized"})
             return self._upload_catalog(url.query)
+        if url.path == "/admin/reset":
+            return self._reset()
         if self.path != "/sync":
             return self._send(404, {"error": "not found"})
         if not self._authorized():
@@ -303,6 +328,7 @@ def main():
         raise SystemExit("Set SPARKLOG_TOKEN to a secret of at least 16 characters")
     Handler.token = token
     Handler.db = connect(os.environ.get("SPARKLOG_DB", "sparklog.db"))
+    Handler.db_path = os.environ.get("SPARKLOG_DB", "sparklog.db")
     Handler.clock = last_ts(Handler.db)
     db_path = os.environ.get("SPARKLOG_DB", "sparklog.db")
     cat_path = os.environ.get("SPARKLOG_CATALOG", os.path.join(os.path.dirname(os.path.abspath(db_path)), "catalog.db"))
