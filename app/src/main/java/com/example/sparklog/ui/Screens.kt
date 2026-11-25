@@ -420,6 +420,7 @@ fun TodoScreen(vm: MainVm) {
     val upcoming = open.filter { t -> dateOf(t)?.isAfter(today) == true }
     val undated = open.filter { dateOf(it) == null }
 
+    val errorColor = MaterialTheme.colorScheme.error
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(top = 4.dp, bottom = 96.dp)) {
             fun section(title: String, list: List<Todo>, color: Color = Color.Unspecified) {
@@ -427,7 +428,7 @@ fun TodoScreen(vm: MainVm) {
                 item(key = "h-$title") { TodoHeader(title, list.size, color) }
                 items(list, key = { it.id }) { t -> TodoRow(t, names, now, onToggle = { vm.save(t.copy(done = !t.done)) }) { dialog = t } }
             }
-            section("Overdue", overdue, MaterialTheme.colorScheme.error)
+            section("Overdue", overdue, errorColor)
             section("Today", todayList)
             section("Upcoming", upcoming)
             section("No date", undated)
