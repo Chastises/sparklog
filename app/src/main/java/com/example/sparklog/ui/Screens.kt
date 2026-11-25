@@ -32,11 +32,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
@@ -45,8 +43,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import com.example.sparklog.data.Customer
 import com.example.sparklog.data.Job
 import com.example.sparklog.data.Todo
@@ -56,7 +52,6 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.material3.Card
@@ -234,16 +229,14 @@ fun HomeScreen(
 ) {
     val today = LocalDate.now()
     val ds = today.toString()
-    val ym = YearMonth.from(today)
     val work by remember(ds) { vm.workDay(ds) }.collectAsState(emptyList())
     val trips by remember(ds) { vm.tripsDay(ds) }.collectAsState(emptyList())
     val materials by remember(ds) { vm.materialsDay(ds) }.collectAsState(emptyList())
-    val monthWork by remember(ds) { vm.workMonth(ym) }.collectAsState(emptyList())
-    val todos by vm.todos.collectAsState(emptyList())
-    val jobs by vm.jobs.collectAsState(emptyList())
-    val allMaterials by vm.allMaterials.collectAsState(emptyList())
-    val allWork by vm.allWork.collectAsState(emptyList())
-    val allTrips by vm.allTrips.collectAsState(emptyList())
+    val todos by vm.todos.collectAsState()
+    val jobs by vm.jobs.collectAsState()
+    val allMaterials by vm.allMaterials.collectAsState()
+    val allWork by vm.allWork.collectAsState()
+    val allTrips by vm.allTrips.collectAsState()
     val names = rememberNames(vm)
 
     var note by remember { mutableStateOf(vm.prefs.homeNote) }
@@ -379,7 +372,7 @@ fun HomeScreen(
 
 @Composable
 fun TodoScreen(vm: MainVm) {
-    val todos by vm.todos.collectAsState(emptyList())
+    val todos by vm.todos.collectAsState()
     val names = rememberNames(vm)
     var showDone by rememberSaveable { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<Any?>(null) }
@@ -455,7 +448,7 @@ fun CalendarScreen(vm: MainVm, onOpenDay: (LocalDate) -> Unit) {
     val trips by remember(ym) { vm.tripsMonth(ym) }.collectAsState(emptyList())
     val materials by remember(ym) { vm.materialsMonth(ym) }.collectAsState(emptyList())
 
-    val allTodos by vm.todos.collectAsState(emptyList())
+    val allTodos by vm.todos.collectAsState()
     val todoDates = allTodos.filter { !it.done }.mapNotNull { dueToDateTime(it.dueAt)?.toLocalDate()?.toString() }.toSet()
     val workDates = work.map { it.date }.toSet()
     val tripDates = trips.map { it.date }.toSet()
@@ -555,7 +548,7 @@ fun DayScreen(vm: MainVm, date: LocalDate, onBack: () -> Unit) {
     val work by remember(ds) { vm.workDay(ds) }.collectAsState(emptyList())
     val trips by remember(ds) { vm.tripsDay(ds) }.collectAsState(emptyList())
     val materials by remember(ds) { vm.materialsDay(ds) }.collectAsState(emptyList())
-    val allTodos by vm.todos.collectAsState(emptyList())
+    val allTodos by vm.todos.collectAsState()
     val dayTodos = allTodos.filter { dueToDateTime(it.dueAt)?.toLocalDate() == date }.sortedBy { it.dueAt }
     val names = rememberNames(vm)
     var dialog by remember { mutableStateOf<Any?>(null) }
@@ -610,8 +603,8 @@ fun DayScreen(vm: MainVm, date: LocalDate, onBack: () -> Unit) {
 /** Display names keyed by id, for both jobs ("#1042 Andersson - Fuse box") and customers. */
 @Composable
 private fun rememberNames(vm: MainVm): Map<String, String> {
-    val jobs by vm.jobs.collectAsState(emptyList())
-    val customers by vm.customers.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState()
+    val customers by vm.customers.collectAsState()
     return remember(jobs, customers) {
         val c = customers.associate { it.id to it.name }
         c + jobs.associate { it.id to jobLabel(it, c) }
@@ -710,13 +703,13 @@ fun DriveScreen(vm: MainVm) {
     val context = LocalContext.current
     val running by TripTrackingService.running.collectAsStateWithLifecycle()
     val liveKm by TripTrackingService.km.collectAsStateWithLifecycle()
-    val recent by vm.recentTrips.collectAsState(emptyList())
+    val recent by vm.recentTrips.collectAsState()
     val trips = remember(recent) { recent.sortedWith(compareBy({ it.date }, { it.updatedAt })) } // oldest first
     val names = rememberNames(vm)
     var purpose by rememberSaveable { mutableStateOf("") }
     var tripJob by rememberSaveable { mutableStateOf("") }
     val runningJob by TripTrackingService.jobId.collectAsStateWithLifecycle()
-    val allJobs by vm.jobs.collectAsState(emptyList())
+    val allJobs by vm.jobs.collectAsState()
     var dialog by remember { mutableStateOf<Any?>(null) }
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -781,9 +774,9 @@ const val NO_JOB = "none"
 /** Materials overview: one row per job with its total cost. Tap a job for its lines by date. */
 @Composable
 fun MaterialsScreen(vm: MainVm, onOpenMaterials: (String) -> Unit) {
-    val materials by vm.allMaterials.collectAsState(emptyList())
-    val jobs by vm.jobs.collectAsState(emptyList())
-    val customers by vm.customers.collectAsState(emptyList())
+    val materials by vm.allMaterials.collectAsState()
+    val jobs by vm.jobs.collectAsState()
+    val customers by vm.customers.collectAsState()
     var dialog by remember { mutableStateOf<Any?>(null) }
     val today = LocalDate.now().toString()
 
@@ -876,9 +869,9 @@ private fun CostedMaterialRow(m: Material, jobPct: Double, onClick: () -> Unit) 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun JobMaterialsScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
-    val materials by vm.allMaterials.collectAsState(emptyList())
-    val jobs by vm.jobs.collectAsState(emptyList())
-    val customers by vm.customers.collectAsState(emptyList())
+    val materials by vm.allMaterials.collectAsState()
+    val jobs by vm.jobs.collectAsState()
+    val customers by vm.customers.collectAsState()
     val names = rememberNames(vm)
     var dialog by remember { mutableStateOf<Any?>(null) }
     val today = LocalDate.now().toString()
@@ -970,10 +963,10 @@ fun JobMaterialsScreen(vm: MainVm, jobId: String, onBack: () -> Unit) {
 
 @Composable
 fun JobsScreen(vm: MainVm, onOpenJob: (String) -> Unit) {
-    val jobs by vm.jobs.collectAsState(emptyList())
-    val customers by vm.customers.collectAsState(emptyList())
-    val work by vm.allWork.collectAsState(emptyList())
-    val materials by vm.allMaterials.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState()
+    val customers by vm.customers.collectAsState()
+    val work by vm.allWork.collectAsState()
+    val materials by vm.allMaterials.collectAsState()
     var showFinished by rememberSaveable { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<Any?>(null) }
 
@@ -1033,22 +1026,26 @@ fun JobsScreen(vm: MainVm, onOpenJob: (String) -> Unit) {
 @Composable
 fun JobDetailScreen(vm: MainVm, jobId: String, onBack: () -> Unit, onOpenMaterials: (String) -> Unit) {
     val context = LocalContext.current
-    val jobs: List<Job>? by vm.jobs.collectAsState(initial = null)
-    val customers by vm.customers.collectAsState(emptyList())
-    val allWork by vm.allWork.collectAsState(emptyList())
-    val allTrips by vm.allTrips.collectAsState(emptyList())
-    val allMaterials by vm.allMaterials.collectAsState(emptyList())
-    val allTodos by vm.todos.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState()
+    val jobsLoaded by vm.jobsLoaded.collectAsState()
+    val customers by vm.customers.collectAsState()
+    val allWork by vm.allWork.collectAsState()
+    val allTrips by vm.allTrips.collectAsState()
+    val allMaterials by vm.allMaterials.collectAsState()
+    val allTodos by vm.todos.collectAsState()
     val names = rememberNames(vm)
     var dialog by remember { mutableStateOf<Any?>(null) }
     var shareMenu by remember { mutableStateOf(false) }
 
-    val job = jobs?.find { it.id == jobId }
-    if (jobs != null && job == null) { // deleted
-        LaunchedEffect(Unit) { onBack() }
-        return
-    }
-    if (job == null) { // still loading: show the page background instead of a blank (white) frame
+    val job = jobs.find { it.id == jobId }
+    if (job == null) {
+        // Deleted (or not loaded yet): go back once we are sure, and meanwhile show the page colour.
+        LaunchedEffect(jobsLoaded, jobs) {
+            if (jobsLoaded) {
+                kotlinx.coroutines.delay(300)
+                if (vm.jobs.value.none { it.id == jobId }) onBack()
+            }
+        }
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
         return
     }
@@ -1270,9 +1267,9 @@ private fun Stat(label: String, value: String) {
 
 @Composable
 fun CustomersScreen(vm: MainVm) {
-    val customers by vm.customers.collectAsState(emptyList())
-    val jobs by vm.jobs.collectAsState(emptyList())
-    val work by vm.allWork.collectAsState(emptyList())
+    val customers by vm.customers.collectAsState()
+    val jobs by vm.jobs.collectAsState()
+    val work by vm.allWork.collectAsState()
     var showFinished by rememberSaveable { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<Any?>(null) }
 

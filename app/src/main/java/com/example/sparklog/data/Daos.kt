@@ -182,8 +182,6 @@ interface MaterialDao {
     @Query("SELECT * FROM materials WHERE deleted = 0 AND date BETWEEN :from AND :to")
     fun observeRange(from: String, to: String): Flow<List<Material>>
 
-    @Query("SELECT * FROM materials WHERE deleted = 0 ORDER BY date DESC, updatedAt DESC LIMIT 300")
-    fun observeRecent(): Flow<List<Material>>
 
     @Query("SELECT * FROM materials WHERE deleted = 0")
     fun observeAll(): Flow<List<Material>>

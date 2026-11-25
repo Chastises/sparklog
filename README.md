@@ -4,34 +4,35 @@ Android app for an electrician's daily record keeping: calendar, driving (manual
 
 ## What's in it
 
-- **Home**: first screen. Today's hours, trips and materials with a prompt if today isn't logged, open and overdue to-dos, month totals, a warning for invoice lines needing a job, and a pinned notes card (saved on the phone only). Settings opens from the gear.
-- **To-do**: list with checkboxes, optional job, and an optional reminder date and time that triggers a notification (scheduled with WorkManager, so it can be a few minutes late in battery saving mode). Done items are tucked away. To-dos sync to the server.
-- **Jobs tab**: one place for everything that belongs to a job, with sections Jobs, Customers, Drive and Materials. The bottom bar is Home, Calendar, Jobs, To-do.
-- **Materials**: one row per job with its total material cost, plus a red "No job assigned" row for imported invoice lines that need a job. Tap a job to see its material lines grouped by date, with a daily total; tap a line to edit it or change its job.
-- **E-number**: materials can have an E-number (the Swedish electrical product number); it is optional for now. Typing an E-number you've used before fills in the name, unit, price and supplier. It shows on material lines, in the customer PDF/CSV, and the invoice importer reads it from the invoice (an \"E-nr 1234567\" label on the row or the line below, otherwise a 7-digit article number).
-- **Markup**: Settings has a default material markup in percent (30% to start with), and each job can override it (blank = use the default). The markup is added to material prices in everything shared with customers (PDF and CSV), which show only the marked-up prices and leave out supplier and invoice details. Only you see the cost price, the markup, the customer price and the profit, on the job pages. A single material line can have its own markup (tap the line in the job's materials list); it overrides the job's. The job overview shows cost, customer price (ex VAT and incl. 25% VAT), profit and margin for materials; the customer PDF shows totals ex VAT, the VAT and the total incl. VAT.
-- **Export**: the share icon on a job page makes a PDF summary (customer, totals, materials by date with day totals, work hours, driving) or a CSV of the material lines, and opens Android's share sheet so you can email it or save it. Prices are as entered or imported (ex VAT).
-- **Job overview**: tap a job to see its customer details (call or email in one tap), totals for hours, km and material cost, and every work entry, trip, material line and to-do on the job. Add new entries straight to the job, mark it finished or reopen it, or edit it with the pencil.
-- **Jobs**: every job has a unique number (plain counter, starting at 1001) and belongs to a customer. A customer can have many jobs. Jobs have Ongoing/Finished lists with hours and material cost; finished jobs disappear from the job dropdowns. Create jobs from the Jobs tab or with "+ New job" in any dropdown. If two phones create the same number, the server renumbers the later one.
-- **Customers** (own tab, Ongoing/Finished): name, contact person, phone, email, address, org/ID number, property designation (for ROT), notes. Ongoing/Finished tabs; finishing a customer hides it from the dropdowns. Shows total hours per customer.
-- **Work hours**: per day, per job (dropdown, with "+ New job" inline). Trips and materials are tied to a job the same way.
-- **Calendar**: month view, dots for work/driving/materials per day, red day number for past weekdays with no work logged, month totals. Tap a day to add or edit entries.
-- **Drive**: GPS trip recorder (foreground service, sums distance, saves a trip on stop) plus manual trips. Tap a trip to edit.
-- **Materials**: log material, quantity, unit and customer per day.
-- **Reminder**: weekdays at the time set in Settings (default 16:00), only if no work entry exists for today. Tapping it opens today.
-- **Sync**: two-way, last write wins by `updatedAt`, deletes are soft so they propagate. Runs after every change (when online) and every 6 hours.
+Bottom bar: **Home, Calendar, Jobs, To-do**. Settings opens from the gear on Home.
 
-If you installed an earlier build of the app, uninstall it first (the database layout changed).
+- **Home**: today's hours, trips and materials with a prompt if today isn't logged, open and overdue to-dos, ongoing jobs with what is left to invoice (ex VAT), a warning for imported invoice lines that need a job, and a pinned notes card (saved on the phone only).
+- **Calendar**: month view with dots for work, driving, materials and to-dos, and a red day number for past weekdays with no work logged. Tap a day to add or edit work, trips, materials and to-dos for that day (a to-do added there starts on that day, with a reminder at 08:00 that you can change or switch off).
+- **Jobs tab**: Jobs, Customers, Drive and Materials in one place.
+  - **Jobs**: each job has a unique number (plain counter from 1001) and belongs to a customer; finished jobs drop out of the dropdowns. Tap a job for its overview: customer (call or email in one tap), hours, km, materials, profit on materials, the "To invoice" total, and every work entry, trip, material line and to-do on the job. "Mark job as finished" is at the bottom. If two phones create the same number, the server renumbers the later one.
+  - **Customers**: name, contact person, phone, email, address, org/ID number, property designation (for ROT), notes. A customer is Active or Inactive; inactive customers are hidden from dropdowns, and a customer with ongoing jobs can't be made inactive.
+  - **Drive**: GPS trip recorder (choose the job to record to) plus manual trips.
+  - **Materials**: one row per job with its total cost, plus a red "No job assigned" row for imported invoice lines. Tap a job for its lines grouped by date.
+- **Rates and prices**: Settings holds the default material markup (30% to start with), hourly rate, driving price per 10 km and call-out fee, all ex VAT. A new job copies them and keeps them, so changing Settings later never changes an old job (jobs that still follow a default are frozen at the old value when you change it). A work entry can override the hourly rate and chooses whether the call-out fee is charged for that visit. Customer prices are shown ex VAT and incl. 25% VAT.
+- **Materials detail**: optional E-number, quantity, unit, price, supplier; a line can have its own markup. "Search price list" fills a line from the retailer's price list (see below). Only you see cost, markup and profit.
+- **Export**: the share icon on a job makes a PDF summary (customer, materials by date, work, driving, and a summary with totals ex VAT, VAT and incl. VAT) or a CSV of the material lines. Customer-facing output never shows markup, supplier or invoice references.
+- **To-do**: checkboxes, optional job, optional reminder date and time (WorkManager, so it can be a few minutes late in battery saving mode).
+- **Reminder**: weekdays at the time set in Settings (default 16:00), only if no work is logged for today. Tapping it opens today.
+- **Sync**: two-way, last write wins by `updatedAt`, deletes are soft so they propagate. Runs after every change when online and every 6 hours. The token is hidden in Settings (Show/Hide).
 
-## Build the app
+## Build and install the app
 
-Open the `sparklog` folder in Android Studio (Ladybug or newer). It will sync Gradle and offer to create the wrapper. Run on a device or emulator (minSdk 26).
-
-This code was written without an Android SDK available, so it has **not been compiled yet**. Expect to fix a few small compile errors on the first build, and bump dependency versions in `app/build.gradle.kts` if Android Studio suggests it.
+GitHub Actions builds the APK on every push to `main` and publishes it as a release (`build-N`). Install and update it with Obtainium. To keep updates installable, builds are signed with a fixed key supplied through the `SIGNING_KEYSTORE_B64` repository secret. You can also open the folder in Android Studio and run it on a device (minSdk 26).
 
 ## Run the server on Proxmox
 
-Stdlib Python 3.9+, no packages. In a small LXC or VM:
+Easiest: in a Debian/Ubuntu container run the installer as root. It installs what is needed, sets up a service that starts on boot, makes a token and prints the URL and token for the app. Running it again updates the server and keeps the token.
+
+```
+apt update && apt install -y curl && curl -fsSL https://raw.githubusercontent.com/Chastises/sparklog/main/server/install.sh | bash
+```
+
+By hand (stdlib Python 3.9+, no packages):
 
 ```
 mkdir -p /opt/sparklog && cp server/*.py /opt/sparklog/
@@ -81,9 +82,8 @@ This writes `catalog.db` next to the sync database (or set `SPARKLOG_CATALOG`). 
 
 ## Known gaps / next steps
 
-- No export (CSV/PDF for invoicing or tax) yet.
 - If an invoice arrives before the job reaches the server (phone offline), its lines are imported without a job and need assigning by hand.
 - GPS trips are lost if Android kills the service mid-trip; no route or from/to place names are recorded.
 - Reminder time is set by typing hour and minute; no time picker.
-- Reminder uses WorkManager, so it can fire a few minutes late under battery optimization.
 - No app icon.
+- Prices from the price list are only searchable while the server is reachable.

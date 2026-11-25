@@ -14,7 +14,10 @@ import com.example.sparklog.data.Trip
 import com.example.sparklog.data.WorkEntry
 import com.example.sparklog.sync.SyncWorker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.YearMonth
@@ -22,6 +25,9 @@ import java.time.YearMonth
 class MainVm(private val app: Application) : AndroidViewModel(app) {
     private val db = AppDb.get(app)
     val prefs = Prefs(app)
+
+    /** True once the job list has been read from the database at least once. */
+    val jobsLoaded = db.jobs().observeAll().map { true }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun workDay(date: String) = db.work().observeDay(date)
     fun tripsDay(date: String) = db.trips().observeDay(date)
@@ -31,9 +37,11 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
     fun tripsMonth(m: YearMonth) = db.trips().observeRange(m.atDay(1).toString(), m.atEndOfMonth().toString())
     fun materialsMonth(m: YearMonth) = db.materials().observeRange(m.atDay(1).toString(), m.atEndOfMonth().toString())
 
-    val customers = db.customers().observeAll()
-    val jobs = db.jobs().observeAll()
-    val todos = db.todos().observeAll()
+    // Hot, app-wide copies of the lists: screens read the current value straight away, so an empty
+    // list is only ever shown when it really is empty (no flash of "No materials yet" while loading).
+    val customers = db.customers().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val jobs = db.jobs().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val todos = db.todos().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun save(t: Todo) {
         val updated = t.copy(updatedAt = now())
@@ -45,7 +53,7 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
         TodoScheduler.sync(app, updated)
         launchSync { db.todos().upsert(updated) }
     }
-    val allMaterials = db.materials().observeAll()
+    val allMaterials = db.materials().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Saves a job. A new job (number 0) gets the next free number. */
     fun save(j: Job) {
@@ -82,14 +90,13 @@ class MainVm(private val app: Application) : AndroidViewModel(app) {
         }
     }
     fun delete(j: Job) = launchSync { db.jobs().upsert(j.copy(deleted = true, updatedAt = now())) }
-    val allWork = db.work().observeAll()
-    val allTrips = db.trips().observeAll()
+    val allWork = db.work().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val allTrips = db.trips().observeAll().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun save(c: Customer) = launchSync { db.customers().upsert(c.copy(updatedAt = now())) }
     fun delete(c: Customer) = launchSync { db.customers().upsert(c.copy(deleted = true, updatedAt = now())) }
 
-    val recentTrips = db.trips().observeRecent()
-    val recentMaterials = db.materials().observeRecent()
+    val recentTrips = db.trips().observeRecent().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private fun now() = System.currentTimeMillis()
 

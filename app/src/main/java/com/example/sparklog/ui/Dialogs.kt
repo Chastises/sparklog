@@ -115,7 +115,7 @@ private fun FormDialog(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CustomerPicker(vm: MainVm, selectedId: String, onSelect: (String) -> Unit) {
-    val customers by vm.customers.collectAsState(emptyList())
+    val customers by vm.customers.collectAsState()
     var expanded by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<Customer?>(null) }
@@ -232,8 +232,8 @@ internal fun jobLabel(j: Job, customerNames: Map<String, String>): String {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun JobPicker(vm: MainVm, selectedId: String, onSelect: (String) -> Unit) {
-    val jobs by vm.jobs.collectAsState(emptyList())
-    val customers by vm.customers.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState()
+    val customers by vm.customers.collectAsState()
     val names = customers.associate { it.id to it.name }
     var expanded by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
@@ -348,7 +348,7 @@ fun WorkDialog(
     defaultJobId: String = "",
     onDismiss: () -> Unit,
 ) {
-    val jobs by vm.jobs.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState()
     var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
     var description by remember { mutableStateOf(initial?.description ?: "") }
     var hours by remember { mutableStateOf(initial?.let { fmt(it.hours) } ?: "") }
@@ -392,7 +392,7 @@ fun TripDialog(
     defaultJobId: String = "",
     onDismiss: () -> Unit,
 ) {
-    val jobs by vm.jobs.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState()
     var date by remember { mutableStateOf(initial?.date ?: defaultDate) }
     var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
     var from by remember { mutableStateOf(initial?.fromPlace ?: "") }
@@ -430,8 +430,8 @@ fun MaterialDialog(
     defaultJobId: String = "",
     onDismiss: () -> Unit,
 ) {
-    val jobs by vm.jobs.collectAsState(emptyList())
-    val known by vm.allMaterials.collectAsState(emptyList())
+    val jobs by vm.jobs.collectAsState()
+    val known by vm.allMaterials.collectAsState()
     var date by remember { mutableStateOf(initial?.date ?: defaultDate) }
     var jobId by remember { mutableStateOf(initial?.jobId ?: defaultJobId) }
     var eNumber by remember { mutableStateOf(initial?.eNumber ?: "") }
