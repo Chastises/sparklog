@@ -10,9 +10,21 @@ class Prefs(context: Context) {
         get() = sp.getString("serverUrl", "") ?: ""
         set(v) = sp.edit().putString("serverUrl", v.trim().trimEnd('/')).apply()
 
+    /** The sync token, stored encrypted with a Keystore key. A token saved by an older version is encrypted on first read. */
     var token: String
-        get() = sp.getString("token", "") ?: ""
-        set(v) = sp.edit().putString("token", v.trim()).apply()
+        get() {
+            val enc = sp.getString("tokenEnc", null)
+            if (enc != null) return SecretBox.decrypt(enc) ?: ""
+            val old = sp.getString("token", "").orEmpty()
+            if (old.isNotEmpty()) token = old // migrate: encrypt it and remove the plain copy
+            return old
+        }
+        set(v) {
+            val t = v.trim()
+            val e = sp.edit().remove("token")
+            if (t.isEmpty()) e.remove("tokenEnc") else e.putString("tokenEnc", SecretBox.encrypt(t))
+            e.apply()
+        }
 
     /** SSH host key of the server, saved the first time the Admin update runs (trust on first use). */
     var sshHostKey: String
