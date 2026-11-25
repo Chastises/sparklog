@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- S drawn as a lightning bolt -->
+    <path android:pathData="M55,30 L29,52 L49,58 L23,80"
+        android:strokeColor="#FFC107" android:strokeWidth="8"
+        android:strokeLineJoin="miter" android:strokeMiterLimit="10" android:strokeLineCap="butt" />
+    <!-- L -->
+    <path android:pathData="M67,30 L67,78 L85,78"
+        android:strokeColor="#FFFFFF" android:strokeWidth="8"
+        android:strokeLineJoin="miter" android:strokeMiterLimit="10" android:strokeLineCap="butt" />
+</vector>
